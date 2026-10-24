@@ -7,12 +7,24 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize('path', ['.impeccable/critique/private.md', '.codex/private.md', 'docs/superpowers/plans/private.md', '.env.private'])
+@pytest.mark.parametrize('path', [
+    '.impeccable/critique/private.md', '.codex/private.md',
+    'docs/superpowers/plans/private.md', '.env.private', 'CODEX_CONTEXT.md',
+    'codex-session/notes.md', '.codex-backup/state.json',
+    'playwright-report/index.html', 'test-results/screen.png',
+    '.playwright-cli/state.yml', 'output/playwright/screen.png',
+    'qa/artifacts/report.json', 'qa/e2e/manifests/routes.local.json',
+    'cert/internal-identity.txt', 'certs/identity.txt', 'exports/identity.crt',
+    'exports/identity.PEM', 'exports/client.key', 'exports/client.p12',
+    'exports/client.pfx', 'exports/identity.cer', 'exports/data.dump',
+    'exports/data.sql.gz', 'exports/data.db', 'exports/data.sqlite',
+    'exports/data.sqlite3',
+])
 def test_publication_guard_rejects_forced_tracked_local_metadata(tmp_path, path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     target = tmp_path / path
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text('Synthetic local note without a credential pattern.\n')
+    target.write_bytes(b'\x00Synthetic local data without a credential pattern.\xff')
     subprocess.run(['git', 'add', '-f', path], cwd=tmp_path, check=True)
     fake_bin = tmp_path / 'bin'; fake_bin.mkdir()
     scanner = fake_bin / 'gitleaks'; scanner.write_text('#!/bin/sh\nexit 0\n'); scanner.chmod(0o755)

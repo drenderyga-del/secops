@@ -7,17 +7,28 @@ scan_dir="$(mktemp -d)"
 trap 'rm -rf "$scan_dir"' EXIT
 python3 - "$scan_dir" <<'PY'
 from pathlib import Path
-import shutil, subprocess, sys
+import fnmatch, shutil, subprocess, sys
 out = Path(sys.argv[1])
 for raw in subprocess.check_output(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard']).split(b'\0'):
     if not raw:
         continue
     source = Path(raw.decode())
-    forbidden = {'.codex', '.agents', '.claude', '.impeccable', '.repowise'}
-    if (any(part in forbidden for part in source.parts)
-        or source.as_posix().startswith('docs/superpowers/')
+    local_dirs = {
+        '.codex', '.agents', '.claude', '.impeccable', '.repowise',
+        '.playwright-cli', 'playwright-report', 'test-results', 'cert', 'certs',
+    }
+    local_names = ('CODEX_CONTEXT.md', '.codex*', 'codex-*', '*.local.*')
+    sensitive_extensions = ('*.pem', '*.key', '*.p12', '*.pfx', '*.crt', '*.cer',
+                            '*.dump', '*.sql.gz', '*.db', '*.sqlite', '*.sqlite3')
+    path = source.as_posix()
+    if (any(part in local_dirs for part in source.parts)
+        or any(fnmatch.fnmatchcase(part, pattern)
+               for part in source.parts for pattern in local_names)
+        or any(fnmatch.fnmatchcase(source.name.lower(), pattern)
+               for pattern in sensitive_extensions)
+        or path.startswith(('docs/superpowers/', 'qa/artifacts/', 'output/playwright/'))
         or (source.name.startswith('.env') and source.name != '.env.example')):
-        raise SystemExit('Forbidden local metadata path: ' + source.as_posix())
+        raise SystemExit('Forbidden local metadata path: ' + path)
 
     if source.is_symlink():
         raise SystemExit('Review symbolic links explicitly before publication.')
