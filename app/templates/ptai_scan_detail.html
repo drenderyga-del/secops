@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}PT AI Scan #{{ scan.id }} - DevSecOps Platform{% endblock %}
+
+{% macro asoc_badge(status) %}
+    {%- set s = (status or '')|upper -%}
+    {%- if s == 'SUCCESS' -%}<span class="badge badge-success">SUCCESS</span>
+    {%- elif s == 'ERROR' -%}<span class="badge badge-danger">ERROR</span>
+    {%- elif s == 'TRIGGER_FAILED' -%}<span class="badge badge-danger">TRIGGER FAILED</span>
+    {%- elif s == 'PARTIAL_SUCCESS' -%}<span class="badge badge-warning">PARTIAL</span>
+    {%- elif s == 'IN_PROGRESS' -%}<span class="badge">IN PROGRESS</span>
+    {%- else -%}<span class="badge badge-muted">{{ s or 'PENDING' }}</span>{%- endif -%}
+{% endmacro %}
+
+{% macro kv(label, value, mono=False) %}
+<div class="detail-kv">
+    <span class="detail-kv-label">{{ label }}</span>
+    {% if value %}<span class="detail-kv-value{% if mono %} mono{% endif %}">{{ value }}</span>{% else %}<span class="no-data">—</span>{% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>PT AI Scan #{{ scan.id }}</h1>
+            <p><code>{{ scan.repo_slug or (scan.repository.path if scan.repository else '—') }}</code>{% if scan.branch %} @ <span class="badge">{{ scan.branch }}</span>{% endif %}</p>
+        </div>
+        <div class="page-actions">
+            <a href="/ptai-scans" class="btn btn-secondary">{{ icons.icon('layers', 'icon-sm') }} All PT AI scans</a>
+            <form method="post" action="/ptai-scans/{{ scan.id }}/repoll" style="margin:0;">
+                <button type="submit" class="btn btn-primary">{{ icons.icon('rotate', 'icon-sm') }} Refresh status now</button>
+            </form>
+            {% if scan.job_web_url %}
+            <a href="{{ scan.job_web_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">{{ icons.icon('arrow-up-right', 'icon-sm') }} GitLab job</a>
+            {% endif %}
+            {% if ptai_result_url %}
+            <a href="{{ ptai_result_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">{{ icons.icon('arrow-up-right', 'icon-sm') }} PT AI result</a>
+            {% endif %}
+            {% if asoc_repository_url %}
+            <a href="{{ asoc_repository_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">{{ icons.icon('arrow-up-right', 'icon-sm') }} ASOC repository</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <section id="status" class="page-section detail-status-bar">
+        <div>
+            <span class="detail-kv-label">ASOC status</span>
+            <div class="detail-status-value">{{ asoc_badge(scan.asoc_status) }}</div>
+        </div>
+        <div>
+            <span class="detail-kv-label">PT AI engine</span>
+            <div class="detail-status-value">
+                {% if scan.ptai_stage %}
+                    {% if scan.ptai_stage in ('Failed', 'Aborted') %}<span class="badge badge-danger" title="{{ scan.ptai_error or '' }}">{{ scan.ptai_stage }}</span>
+                    {% elif scan.ptai_stage == 'Done' %}<span class="badge badge-success">Done{% if scan.ptai_has_errors %} ⚠{% endif %}</span>
+                    {% else %}<span class="badge">{{ scan.ptai_stage }}{% if scan.ptai_progress is not none %} {{ scan.ptai_progress }}%{% endif %}</span>{% endif %}
+                {% else %}<span class="no-data">—</span>{% endif %}
+            </div>
+        </div>
+        <div>
+            <span class="detail-kv-label">Trigger</span>
+            <div class="detail-status-value">{% if scan.trigger_failed %}<span class="badge badge-danger">failed</span>{% else %}<span class="badge badge-success">accepted</span>{% endif %}</div>
+        </div>
+    </section>
+
+    {% if debug %}
+    <section id="errors" class="page-section table-container ptai-debug">
+        <h2>{{ icons.icon('rotate', 'icon-sm') }} Status refresh result</h2>
+        {% if debug.error %}<p class="cscan-error-box">{{ debug.error }}</p>{% endif %}
+        {% if debug.note %}<p class="text-muted">{{ debug.note }}</p>{% endif %}
+        <div class="detail-kv-grid">
+            {{ kv('ASOC configured', 'yes' if debug.asoc_enabled else 'no — connect ASOC in Integrations') }}
+            {% if debug.applied %}
+                {{ kv('New ASOC status', debug.applied.asoc_status) }}
+                {{ kv('finished_at', debug.applied.finished_at) }}
+            {% endif %}
+        </div>
+        {% for req in debug.asoc_requests %}
+        <div class="ptai-debug-req">
+            <div class="ptai-debug-req-head">
+                <strong>{{ req.label }}</strong>
+                {% if req.code %}<span class="badge {% if req.code == 200 %}badge-success{% else %}badge-danger{% endif %}">HTTP {{ req.code }}</span>{% elif req.error %}<span class="badge badge-danger">transport error</span>{% endif %}
+                <code class="ptai-debug-url">{{ req.url }}</code>
+            </div>
+            {% if req.error %}<pre class="iac-error-log">{{ req.error }}</pre>
+            {% else %}<pre class="iac-error-log">{{ req.body | tojson(indent=2) }}</pre>{% endif %}
+        </div>
+        {% endfor %}
+        {% if debug.engine %}
+        <div class="ptai-debug-req">
+            <div class="ptai-debug-req-head"><strong>PT AI engine</strong></div>
+            <pre class="iac-error-log">{{ debug.engine | tojson(indent=2) }}</pre>
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    {% if scan.error_text %}
+    <section id="{% if debug %}error-note{% else %}errors{% endif %}" class="page-section cscan-error-box">
+        <strong>Error / last poll note</strong>
+        <pre class="iac-error-log">{{ scan.error_text }}</pre>
+    </section>
+    {% endif %}
+
+    <section id="summary" class="page-section table-container">
+        <h2>Identity</h2>
+        <div class="detail-kv-grid">
+            {{ kv('GitLab project', scan.gitlab_project_id, mono=True) }}
+            {{ kv('GitLab pipeline', scan.gitlab_pipeline_id, mono=True) }}
+            {{ kv('GitLab job', scan.gitlab_job_id, mono=True) }}
+            {{ kv('Repository', (scan.repository.path if scan.repository else scan.repo_slug), mono=True) }}
+            {{ kv('Product', (scan.product.name if scan.product else None)) }}
+            {{ kv('Branch', scan.branch, mono=True) }}
+        </div>
+    </section>
+
+    <section class="page-section table-container">
+        <h2>ASOC / PT AI identifiers</h2>
+        <div class="detail-kv-grid">
+            {{ kv('Vampy request_id', scan.asoc_scan_id, mono=True) }}
+            {{ kv('ASOC repository_id', scan.asoc_repository_id, mono=True) }}
+            {{ kv('ASOC task_id', scan.asoc_task_id, mono=True) }}
+            {{ kv('ASOC pipeline_id', scan.asoc_pipeline_id, mono=True) }}
+            {{ kv('PT AI project_id', scan.ptai_project_id, mono=True) }}
+            {{ kv('PT AI branch_id', scan.ptai_branch_id, mono=True) }}
+            {{ kv('PT AI scan_result_id', scan.ptai_scan_result_id, mono=True) }}
+        </div>
+    </section>
+
+    <section id="timeline" class="page-section table-container">
+        <h2>Timeline</h2>
+        <div class="detail-kv-grid">
+            {{ kv('Captured', scan.created_at|localtime('%Y-%m-%d %H:%M:%S MSK') if scan.created_at else None) }}
+            {{ kv('Last polled', scan.last_polled_at|localtime('%Y-%m-%d %H:%M:%S MSK') if scan.last_polled_at else None) }}
+            {{ kv('Finished', scan.finished_at|localtime('%Y-%m-%d %H:%M:%S MSK') if scan.finished_at else None) }}
+            {{ kv('PT AI polled', scan.ptai_polled_at|localtime('%Y-%m-%d %H:%M:%S MSK') if scan.ptai_polled_at else None) }}
+            {{ kv('Last alert', scan.last_alert_at|localtime('%Y-%m-%d %H:%M:%S MSK') if scan.last_alert_at else None) }}
+        </div>
+    </section>
+</div>
+{% endblock %}

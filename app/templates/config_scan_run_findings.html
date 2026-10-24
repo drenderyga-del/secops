@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/cscan_harbor.html' as harbor %}
+
+{% block title %}Findings · {{ project_path }} · Run #{{ run.id }}{% endblock %}
+
+{% block content %}
+<div class="products-page cscan-findings-page">
+    <div class="page-header cscan-findings-page-header">
+        <div>
+            <h1 class="cscan-findings-page-title">{{ icons.icon('warning', 'icon-sm') }} Configuration findings</h1>
+            <p class="cscan-findings-page-repo">
+                {% if project_url %}
+                <span class="cscan-findings-repo-card">
+                    <span class="cscan-findings-repo-path">{{ project_path }}</span>
+                    <a href="{{ project_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm cscan-gitlab-link">{{ icons.icon('arrow-up-right', 'icon-sm') }} GitLab</a>
+                </span>
+                {% else %}
+                <code class="cscan-scope-code">{{ project_path }}</code>
+                {% endif %}
+            </p>
+        </div>
+        <div class="page-actions">
+            <a href="/config-scan/runs/{{ run.id }}" class="btn btn-secondary">{{ icons.icon('diagram', 'icon-sm') }} Run #{{ run.id }}</a>
+            <a href="/config-scan/products/{{ product.id }}" class="btn btn-secondary">{{ icons.icon('cube', 'icon-sm') }} {{ product.name }}</a>
+        </div>
+        <section id="summary" class="page-section cscan-findings-page-summary">
+            {{ harbor.cscan_harbor_severity(findings_summary) }}
+        </section>
+    </div>
+
+    {% if findings %}
+    <section class="filter-bar signal-filter-surface cscan-findings-filter" role="search" aria-label="Filter configuration findings" data-config-finding-filters>
+        <div class="filter-field">
+            <label for="config-finding-search">Search results</label>
+            <div class="filter-input-wrap">
+                <input id="config-finding-search" type="search" placeholder="Rule, title, repository or evidence" autocomplete="off" data-config-finding-search>
+            </div>
+        </div>
+        <div class="filter-field select-field">
+            <label for="config-finding-severity">Severity</label>
+            <div class="select">
+                <select id="config-finding-severity" data-config-severity-filter>
+                    <option value="all">All ({{ findings|length }})</option>
+                    <option value="critical">Critical ({{ findings_summary.critical or 0 }})</option>
+                    <option value="high">High ({{ findings_summary.high or 0 }})</option>
+                    <option value="medium">Medium ({{ findings_summary.medium or 0 }})</option>
+                    <option value="low">Low ({{ findings_summary.low or 0 }})</option>
+                    <option value="info">Info ({{ findings_summary.info or 0 }})</option>
+                </select>
+            </div>
+        </div>
+        <p class="filter-result-count" aria-live="polite"><span data-config-findings-visible>{{ findings|length }}</span> matching findings</p>
+    </section>
+    <section id="findings" class="page-section cscan-findings-compact-list" role="list">
+        {% for item in findings %}
+        {% set sev_key = (item.severity or 'info')|lower %}
+        <article class="cscan-finding-compact cscan-finding-compact--{% if sev_key in ['critical', 'high', 'medium', 'low', 'info'] %}{{ sev_key }}{% else %}unknown{% endif %}" role="listitem" data-config-finding data-severity="{{ sev_key }}" data-search="{{ ((item.code or item.rule_id or '') ~ ' ' ~ (item.title or '') ~ ' ' ~ (item.project_path or '') ~ ' ' ~ (item.description or '') ~ ' ' ~ (item.recommendation or '') ~ ' ' ~ (item.evidence or item.detail or ''))|lower|e }}">
+            <div class="cscan-finding-compact-top">
+                {% if sev_key in ['critical', 'high'] %}
+                <span class="pill failed pill-sev-compact">{{ (item.severity or '')|upper }}</span>
+                {% elif sev_key == 'medium' %}
+                <span class="pill warning pill-sev-compact">{{ (item.severity or '')|upper }}</span>
+                {% elif sev_key == 'low' %}
+                <span class="pill pill-sev--low pill-sev-compact">{{ (item.severity or '')|upper }}</span>
+                {% else %}
+                <span class="pill pill-sev--info pill-sev-compact">{{ (item.severity or 'INFO')|upper }}</span>
+                {% endif %}
+                <code class="cscan-finding-code">{{ item.code or item.rule_id or '—' }}</code>
+            </div>
+            <h2 class="cscan-finding-compact-title">{{ item.title }}</h2>
+            {% if item.description %}
+            <p class="cscan-finding-compact-desc">{{ item.description }}</p>
+            {% endif %}
+            {% if item.recommendation %}
+            <p class="cscan-finding-compact-rec"><strong>Recommendation:</strong> {{ item.recommendation }}</p>
+            {% endif %}
+            {% set ev_text = item.evidence or item.detail %}
+            {% if ev_text %}
+            <details class="cscan-finding-evidence-details">
+                <summary>Evidence</summary>
+                <pre class="cscan-finding-evidence-pre">{{ ev_text }}</pre>
+            </details>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </section>
+    <p class="filter-empty-state" data-config-findings-empty hidden>No findings match the selected filters.</p>
+    {% else %}
+    <section id="findings" class="page-section empty-state">
+        <p>No findings recorded for this repository in this run.</p>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var root = document.querySelector('[data-config-finding-filters]');
+    if (!root) return;
+    var search = root.querySelector('[data-config-finding-search]');
+    var severityControl = root.querySelector('[data-config-severity-filter]');
+    var findings = Array.prototype.slice.call(document.querySelectorAll('[data-config-finding]'));
+    var visible = root.querySelector('[data-config-findings-visible]');
+    var empty = document.querySelector('[data-config-findings-empty]');
+    var parameters = new URLSearchParams(window.location.search);
+    var requestedSeverity = parameters.get('finding_severity') || 'all';
+    var severity = ['all', 'critical', 'high', 'medium', 'low', 'info'].includes(requestedSeverity) ? requestedSeverity : 'all';
+
+    if (search) search.value = parameters.get('finding_q') || '';
+    if (severityControl) severityControl.value = severity;
+
+    function syncFilters(push) {
+        var url = new URL(window.location.href);
+        var query = search ? search.value.trim() : '';
+        if (query) url.searchParams.set('finding_q', query);
+        else url.searchParams.delete('finding_q');
+        if (severity !== 'all') url.searchParams.set('finding_severity', severity);
+        else url.searchParams.delete('finding_severity');
+        window.history[push ? 'pushState' : 'replaceState']({}, '', url.pathname + url.search + url.hash);
+    }
+
+    function applyFilters(sync, push) {
+        var query = search ? search.value.trim().toLowerCase() : '';
+        var count = 0;
+        findings.forEach(function (finding) {
+            var matches = (!query || (finding.dataset.search || '').includes(query))
+                && (severity === 'all' || (finding.dataset.severity || 'info') === severity);
+            finding.hidden = !matches;
+            if (matches) count += 1;
+        });
+        if (visible) visible.textContent = String(count);
+        if (empty) empty.hidden = count !== 0;
+        if (sync) syncFilters(push);
+    }
+
+    if (search) search.addEventListener('input', function () { applyFilters(true, false); });
+    if (severityControl) severityControl.addEventListener('change', function () {
+        severity = severityControl.value;
+        applyFilters(true, true);
+    });
+    window.addEventListener('popstate', function () {
+        var state = new URLSearchParams(window.location.search);
+        severity = state.get('finding_severity') || 'all';
+        if (!['all', 'critical', 'high', 'medium', 'low', 'info'].includes(severity)) severity = 'all';
+        if (search) search.value = state.get('finding_q') || '';
+        if (severityControl) {
+            severityControl.value = severity;
+            severityControl.dispatchEvent(new Event('signal-select-sync'));
+        }
+        applyFilters(false, false);
+    });
+    applyFilters(false, false);
+}());
+</script>
+{% endblock %}

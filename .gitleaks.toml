@@ -1,0 +1,16 @@
+[extend]
+useDefault = true
+
+# Exact, deliberately invalid credentials used by URL-safety regression tests.
+[[allowlists]]
+condition = "AND"
+paths = ['''(^|/)tests/test_asoc_description_safety\.py$''']
+regexTarget = "secret"
+regexes = ['''^glpat-abcdefghijklmnopqrst$''']
+
+# A fixed event correlation identifier in a browser fixture, not an API key.
+[[allowlists]]
+condition = "AND"
+paths = ['''(^|/)qa/e2e/signal-control\.spec\.ts$''']
+regexTarget = "secret"
+regexes = ['''^qa-preservation-901$''']

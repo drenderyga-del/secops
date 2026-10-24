@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Coverage run history · ScanOps{% endblock %}
+
+{% block content %}
+<div class="coverage-runs-page">
+    <div class="page-header">
+        <div>
+            <h1>Coverage run history</h1>
+            <p>Historical scan execution and diagnostics. Current repository state remains on the Coverage overview.</p>
+        </div>
+        <nav class="module-tabs" aria-label="Coverage views">
+            <a class="module-tab" href="{{ coverage_url }}">{{ icons.icon('chart', 'icon-sm') }} Current coverage</a>
+            <a class="module-tab active" href="{{ coverage_runs_url }}" aria-current="page">{{ icons.icon('clock', 'icon-sm') }} Run history</a>
+        </nav>
+    </div>
+
+    <section class="page-section coverage-run-history" aria-labelledby="coverage-run-history-title">
+        <header class="coverage-run-history-header">
+            <div>
+                <h2 id="coverage-run-history-title">Runs</h2>
+                <p>{{ pagination.total }} retained run{% if pagination.total != 1 %}s{% endif %}, newest first.</p>
+            </div>
+            <span class="coverage-run-page-indicator">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+        </header>
+
+        {% if runs %}
+        <div class="coverage-run-list">
+            {% for run in runs %}
+            <article class="coverage-run-row">
+                <div class="coverage-run-identity">
+                    <a href="{{ run.url }}">Run #{{ run.id }}</a>
+                    <span class="status-badge {{ run.status_class }}">{{ run.status_label }}</span>
+                </div>
+                <dl class="coverage-run-facts">
+                    <div>
+                        <dt>Repositories</dt>
+                        <dd>{{ run.processed_repositories }} / {{ run.total_repositories }}</dd>
+                    </div>
+                    <div>
+                        <dt>Started</dt>
+                        <dd>{{ run.started_at|localtime('%Y-%m-%d %H:%M') if run.started_at else 'Not started' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Duration</dt>
+                        <dd>{{ run.duration or '—' }}</dd>
+                    </div>
+                </dl>
+                <p class="coverage-run-excerpt">{{ run.diagnostic_excerpt or 'No diagnostic recorded.' }}</p>
+                <a class="btn btn-ghost btn-sm coverage-run-open" href="{{ run.url }}">Open run</a>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">{{ icons.icon('clock', 'icon-lg') }}</div>
+            <h3>No Coverage runs yet</h3>
+            <p>Start a scan from Current coverage; completed and failed runs will appear here.</p>
+            <a class="btn btn-primary" href="{{ coverage_url }}#run">Open Current coverage</a>
+        </div>
+        {% endif %}
+
+        {% if pagination.pages > 1 %}
+        <nav class="pagination coverage-run-pagination" aria-label="Coverage run history pages">
+            {% if pagination.previous_url %}
+            <a class="btn btn-outline btn-sm" href="{{ pagination.previous_url }}">Previous</a>
+            {% else %}
+            <span class="btn btn-outline btn-sm disabled" aria-disabled="true">Previous</span>
+            {% endif %}
+            <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+            {% if pagination.next_url %}
+            <a class="btn btn-outline btn-sm" href="{{ pagination.next_url }}">Next</a>
+            {% else %}
+            <span class="btn btn-outline btn-sm disabled" aria-disabled="true">Next</span>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

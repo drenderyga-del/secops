@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "canonical_vocabulary": {
+    "navigation_label": "Targets",
+    "product": "Product target",
+    "repository": "Repository target",
+    "repository_detail": "Target 360",
+    "coverage": "Coverage"
+  },
+  "canonical_routes": [
+    {
+      "name": "targets_collection",
+      "method": "GET",
+      "path": "/targets",
+      "owner": "targets",
+      "purpose": "Browse product targets or repository targets.",
+      "query": {
+        "level": {
+          "allowed": [
+            "product",
+            "repository"
+          ],
+          "default": "product"
+        }
+      }
+    },
+    {
+      "name": "product_target_detail",
+      "method": "GET",
+      "path": "/targets/products/{product_id}",
+      "owner": "targets",
+      "purpose": "Monitored GitLab product group: the ASOC cards that link to it, repository scan coverage and pipeline evidence."
+    },
+    {
+      "name": "product_card_detail",
+      "method": "GET",
+      "path": "/targets/products/asoc/{asoc_id}",
+      "owner": "targets",
+      "purpose": "ASOC product card: connection date, sync status of its GitLab links, and the scan coverage of every linked group."
+    },
+    {
+      "name": "repository_target_360",
+      "method": "GET",
+      "path": "/targets/repositories/{repository_id}",
+      "owner": "targets",
+      "purpose": "Repository identity, controls, freshness and scanner-neutral execution evidence."
+    },
+    {
+      "name": "coverage_aggregate",
+      "method": "GET",
+      "path": "/coverage",
+      "owner": "coverage",
+      "purpose": "Cross-target expected-versus-observed control coverage and exceptions."
+    },
+    {
+      "name": "coverage_product_drilldown",
+      "method": "GET",
+      "path": "/coverage/products/{product_id}",
+      "owner": "coverage",
+      "purpose": "Coverage-only drilldown for one product target."
+    }
+  ],
+  "compatibility_routes": [
+    {
+      "from": "/products",
+      "to": "/targets?level=product",
+      "policy": "308_redirect",
+      "preserve_query": true
+    },
+    {
+      "from": "/repositories",
+      "to": "/targets?level=repository",
+      "policy": "308_redirect",
+      "preserve_query": true
+    },
+    {
+      "from": "/products/{product_id}",
+      "to": "/targets/products/{product_id}",
+      "policy": "308_redirect",
+      "preserve_query": true
+    },
+    {
+      "from": "/repos/{repository_id}",
+      "to": "/targets/repositories/{repository_id}",
+      "policy": "308_redirect",
+      "preserve_query": true
+    },
+    {
+      "from": "/audit",
+      "to": "/coverage",
+      "policy": "308_redirect",
+      "preserve_query": true,
+      "filtered_to": "/coverage/operator",
+      "filter_keys": [
+        "only_problems",
+        "selected_product_ids",
+        "status",
+        "status_filter",
+        "run_id"
+      ]
+    },
+    {
+      "from": "/audit/products/{product_id}",
+      "to": "/coverage/products/{product_id}",
+      "policy": "308_redirect",
+      "preserve_query": true
+    },
+    {
+      "from": "/reports",
+      "to": "/targets?level=product",
+      "policy": "308_redirect",
+      "preserve_query": false,
+      "query_translation": {
+        "year+quarter": "period=<year>-Q<quarter>&mode=new"
+      }
+    },
+    {
+      "from": "/reports/operator",
+      "to": "/targets?level=product",
+      "policy": "308_redirect",
+      "preserve_query": false,
+      "query_translation": {
+        "year+quarter": "period=<year>-Q<quarter>&mode=new"
+      }
+    },
+    {
+      "from": "/classic/reports",
+      "to": "/targets?level=product",
+      "policy": "308_redirect",
+      "preserve_query": false,
+      "query_translation": {
+        "year+quarter": "period=<year>-Q<quarter>&mode=new"
+      }
+    },
+    {
+      "from": "/reports/export.xlsx",
+      "to": "/api/ui/products/export.xlsx",
+      "policy": "308_redirect",
+      "preserve_query": false,
+      "query_translation": {
+        "year+quarter": "period=<year>-Q<quarter>&mode=new"
+      }
+    }
+  ],
+  "retained_routes": [
+    {
+      "path": "/targets/operator",
+      "owner": "targets",
+      "reason": "Retains product path normalization, duplicate cleanup and product deletion outside the read-only canonical inventory."
+    },
+    {
+      "path": "/repos/{repository_id}/jobs",
+      "owner": "operations",
+      "reason": "Repository-scoped job evidence is an Operations destination, not entity detail."
+    },
+    {
+      "path": "/config-scan/products/{product_id}",
+      "owner": "operations",
+      "reason": "Config Guard run and finding workflow remains module-specific evidence."
+    },
+    {
+      "path": "/iac/repositories/{repo_row_id}",
+      "owner": "operations",
+      "identifier_semantics": "repo_row_id is IacRepository.id, not Repository.id.",
+      "reason": "The identifier belongs to an IaC scan row and is not a canonical Repository id."
+    }
+  ]
+}

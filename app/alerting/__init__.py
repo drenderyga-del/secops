@@ -1,0 +1,1 @@
+"""Outbound alerting (Mattermost, email)."""

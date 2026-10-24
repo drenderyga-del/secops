@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/cscan_harbor.html' as harbor %}
+{% import 'macros/cscan_ui.html' as cscan_ui %}
+
+{% block title %}Config Scan Run #{{ run.id }} - DevSecOps Platform{% endblock %}
+
+{% block content %}
+{% set tree_ok = project_tree and (project_tree.repos_count > 0 or project_tree.children|length > 0) %}
+{% set sev = summary.severity if summary and summary.severity is mapping else {} %}
+<div class="products-page">
+    <div class="cscan-run-hero">
+        <div class="cscan-run-hero-top">
+            <h1 class="cscan-run-hero-title">Run #{{ run.id }}</h1>
+            <div class="cscan-run-hero-actions">
+                <a href="/config-scan/products/{{ product.id }}" class="btn btn-secondary btn-sm">{{ icons.icon('cube', 'icon-sm') }} {{ product.name }}</a>
+                {% if run.report_json_path %}
+                    <a href="/config-scan/runs/{{ run.id }}/report/json" class="btn btn-ghost btn-sm">{{ icons.icon('download', 'icon-sm') }} Download JSON</a>
+                {% endif %}
+                {% if run.report_html_path %}
+                    <a href="/config-scan/runs/{{ run.id }}/report/html" class="btn btn-ghost btn-sm">{{ icons.icon('download', 'icon-sm') }} Download HTML</a>
+                {% endif %}
+                <form method="post" action="/config-scan/run" class="cscan-inline-form">
+                    <input type="hidden" name="product_ids" value="{{ product.id }}">
+                    <button type="submit" class="btn btn-primary btn-sm">{{ icons.icon('rotate', 'icon-sm') }} Run Again</button>
+                </form>
+            </div>
+        </div>
+        <p class="cscan-run-target">
+            <span class="cscan-run-target-label">Target</span>
+            {{ product.name }} /
+            <a href="{{ product.gitlab_base_url }}/{{ cscan_scope_path }}" target="_blank" rel="noopener noreferrer" class="cscan-run-target-path cscan-scope-link">
+                {{ cscan_scope_path }} {{ icons.icon('arrow-up-right', 'icon-sm') }}
+            </a>
+        </p>
+        <div class="cscan-run-meta-line">
+            {% if run.status == 'succeeded' %}
+                <span id="run-status-badge" class="status-badge success">{{ icons.icon('check-circle', 'icon-sm') }}&nbsp;succeeded</span>
+            {% elif run.status == 'failed' %}
+                <span id="run-status-badge" class="status-badge error">{{ icons.icon('x-circle', 'icon-sm') }}&nbsp;Failed</span>
+            {% elif run.status in ['queued', 'running'] %}
+                <span id="run-status-badge" class="status-badge running">{{ icons.icon('spinner', 'icon-sm') }}&nbsp;{{ run.status | title }}</span>
+            {% else %}
+                <span id="run-status-badge" class="status-badge unknown">{{ run.status }}</span>
+            {% endif %}
+            <span class="cscan-run-meta-item">Trigger: <strong>{{ run.trigger }}</strong></span>
+            <span class="cscan-run-meta-item">Progress: <strong id="run-progress">{{ projects_scanned_display }}/{{ projects_total_display }}</strong></span>
+            <span class="cscan-run-meta-item">Findings: <strong id="run-findings">{{ run.findings_count }}</strong></span>
+            {% if run.started_at %}
+                <span class="cscan-run-meta-item timestamp">{{ icons.icon('clock', 'icon-sm') }} {{ run.started_at|localtime('%Y-%m-%d %H:%M:%S') }}</span>
+            {% endif %}
+            {% if run.finished_at %}
+                <span class="cscan-run-meta-item timestamp">&rarr; {{ run.finished_at|localtime('%H:%M:%S') }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if run.error_text %}
+    <div class="cscan-error-box">
+        <strong>{{ icons.icon('warning', 'icon-sm') }} Error:</strong> {{ run.error_text }}
+    </div>
+    {% endif %}
+
+    {% if run.status == 'succeeded' or summary %}
+    <section id="summary" class="page-section cscan-summary-section" aria-labelledby="cscan-summary-heading">
+        <h2 id="cscan-summary-heading" class="cscan-summary-heading">Summary</h2>
+        <div class="cscan-summary-strip">
+            <span class="cscan-sum-pill cscan-sum-pill--critical">Critical: {{ sev.get('critical', 0) }}</span>
+            <span class="cscan-sum-pill cscan-sum-pill--high">High: {{ sev.get('high', 0) }}</span>
+            <span class="cscan-sum-pill cscan-sum-pill--medium">Medium: {{ sev.get('medium', 0) }}</span>
+            <span class="cscan-sum-pill cscan-sum-pill--low">Low: {{ sev.get('low', 0) }}</span>
+            <span class="cscan-sum-pill cscan-sum-pill--info">Info: {{ sev.get('info', 0) }}</span>
+        </div>
+        {% if summary and summary.projects_scanned is defined %}
+        <div class="cscan-summary-extra">
+            <span class="cscan-run-meta-item">Scanned projects: <strong>{{ summary.projects_scanned }}</strong></span>
+            {% if summary.projects_with_findings is defined %}
+            <span class="cscan-run-meta-item">With findings: <strong>{{ summary.projects_with_findings }}</strong></span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    <section id="results" class="page-section">
+        {% if tree_ok %}
+        <p class="cscan-mode-banner cscan-mode-banner--json"><strong>Results source:</strong> JSON report (compact tree). Use <strong>Findings</strong> to open the list for one repository.</p>
+        {% elif repo_table_rows and repo_table_groups %}
+        <p class="cscan-mode-banner cscan-mode-banner--json"><strong>Results source:</strong> full JSON report (grouped list). Sections expand on click.</p>
+        {% elif project_groups %}
+        <p class="cscan-mode-banner cscan-mode-banner--db"><strong>Results source:</strong> database only (report file unavailable). Each repository row below expands.</p>
+        {% endif %}
+
+        {% if tree_ok %}
+            {% with cscan_findings_run_id = run.id %}
+            {% include 'partials/config_scan_results_tree.html' %}
+            {% endwith %}
+        {% elif repo_table_rows and repo_table_groups %}
+            {% with cscan_findings_run_id = run.id %}
+            {% include 'partials/config_scan_results_flat.html' %}
+            {% endwith %}
+        {% endif %}
+
+        {% if project_groups %}
+        <h2 class="cscan-secondary-heading">{{ icons.icon('layers', 'icon-sm') }} Findings by Repository</h2>
+        <p class="cscan-results-hint">Expand a repository for a quick table, or open the <strong>findings page</strong> for the full list.</p>
+        {% for group in project_groups %}
+        <details class="cscan-repo-accordion">
+            <summary class="cscan-repo-accordion-summary">
+                <span class="cscan-repo-accordion-head">
+                    <span class="cscan-details-chevron" aria-hidden="true"></span>
+                    <span class="cscan-repo-accordion-title">
+                        <strong class="cscan-repo-accordion-path">{{ group.project_path }}</strong>
+                        {% if group.project_url %}
+                            <a href="{{ group.project_url }}" target="_blank" rel="noopener noreferrer" class="cscan-repo-accordion-ext" onclick="event.stopPropagation();">{{ icons.icon('arrow-up-right', 'icon-sm') }}</a>
+                        {% endif %}
+                    </span>
+                </span>
+                <span class="cscan-repo-accordion-pills">
+                    {{ harbor.cscan_harbor_severity(group.summary) }}
+                    {{ cscan_ui.severity_pills(group.summary) }}
+                </span>
+            </summary>
+            <div class="cscan-repo-accordion-body table-container" tabindex="0" aria-label="Findings for {{ group.project_path }}">
+            <p class="cscan-accordion-findings-link-wrap">
+                <a href="/config-scan/runs/{{ run.id }}/findings?project={{ group.project_path | urlencode }}" class="btn btn-ghost btn-sm">{{ icons.icon('arrow-up-right', 'icon-sm') }} Full findings page</a>
+            </p>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 90px;">Severity</th>
+                        <th style="width: 140px;">Rule</th>
+                        <th>Title</th>
+                        <th>Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in group.findings %}
+                    <tr>
+                        <td>{{ cscan_ui.severity_badge(f.severity) }}</td>
+                        <td><code style="color: var(--accent-primary);">{{ f.rule_id }}</code></td>
+                        <td>
+                            <strong style="color: var(--text-primary);">{{ f.title }}</strong>
+                            {% if f.description %}
+                                <br><small style="color: var(--text-muted);">{{ f.description }}</small>
+                            {% endif %}
+                            {% if f.recommendation %}
+                                <br><small style="color: var(--success);">{{ f.recommendation }}</small>
+                            {% endif %}
+                        </td>
+                        <td><small style="color: var(--text-muted);"><code>{{ f.detail or '' }}</code></small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </details>
+                {% endfor %}
+        {% endif %}
+    </section>
+
+    {% if top_findings %}
+    <section id="findings" class="page-section cscan-tree-section">
+        <details>
+            <summary class="cscan-global-top-summary"><span class="cscan-details-chevron" aria-hidden="true"></span>{{ icons.icon('chart', 'icon-sm') }} Global Top Findings <span class="tree-meta">(first 100)</span></summary>
+            <div class="table-container" tabindex="0" aria-label="Configuration scan summary" style="margin-top: 0.75rem;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 90px;">Severity</th>
+                            <th style="width: 110px;">Code</th>
+                            <th>Project</th>
+                            <th>Title</th>
+                            <th>Evidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in top_findings %}
+                        <tr>
+                            <td>{{ cscan_ui.severity_badge(item.severity) }}</td>
+                            <td><code style="color: var(--accent-primary);">{{ item.code or item.rule_id }}</code></td>
+                            <td>
+                                {% if item.project_url %}
+                                    <a href="{{ item.project_url }}" target="_blank" rel="noreferrer" class="cscan-external-project-link">{{ item.project_path }}</a>
+                                {% else %}
+                                    {{ item.project_path }}
+                                {% endif %}
+                            </td>
+                            <td style="color: var(--text-primary);">{{ item.title }}</td>
+                            <td><small style="color: var(--text-muted);">{{ item.evidence }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    </section>
+    {% endif %}
+
+    {% if run.status == 'succeeded' and not tree_ok and not repo_table_rows and not project_groups %}
+    <section class="page-section empty-state">
+        <div class="empty-icon">{{ icons.icon('check-circle', 'icon-lg') }}</div>
+        <h3>No Findings</h3>
+        <p>This scan completed without any configuration findings.</p>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/cscan-repo-filter.js" defer></script>
+{% if run.status in ['queued', 'running'] %}
+<script>
+(function () {
+    var runId = {{ run.id }};
+    var progressNode = document.getElementById("run-progress");
+    var findingsNode = document.getElementById("run-findings");
+    var terminal = {"succeeded": true, "failed": true};
+
+    function poll() {
+        fetch("/config-scan/scan-status?run_id=" + runId + "&ts=" + Date.now(), {cache: "no-store"})
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.run) return;
+                var run = data.run;
+                /* Keep badge markup (icons) until terminal reload */
+                if (progressNode) progressNode.textContent = run.scanned_projects + "/" + run.total_projects;
+                if (findingsNode) findingsNode.textContent = "" + run.findings_count;
+
+                if (terminal[run.status]) {
+                    window.location.reload();
+                    return;
+                }
+                setTimeout(poll, 3000);
+            })
+            .catch(function () {
+                setTimeout(poll, 5000);
+            });
+    }
+
+    setTimeout(poll, 2000);
+})();
+</script>
+{% endif %}
+{% endblock %}

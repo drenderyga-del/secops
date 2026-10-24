@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'iac_macros.html' as iac_ui %}
+{% import 'macros/data_surfaces.html' as data_surfaces %}
+
+{% block title %}IaC Run #{{ run.id }} - DevSecOps Platform{% endblock %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>IaC Run #{{ run.id }}{% if run.is_rescan %} <span class="badge badge-warning" title="Single-repository scan retry">rescan</span>{% endif %}</h1>
+            <p><code>{{ run.target_label }}</code></p>
+        </div>
+        {{ iac_ui.iac_tabs(active_tab) }}
+        <div class="page-actions">
+            <a href="{{ run.target_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">{{ icons.icon('arrow-up-right', 'icon-sm') }} GitLab</a>
+            {% if run.status in ['queued', 'running'] %}
+            <form method="post" action="/iac/runs/{{ run.id }}/cancel" style="margin:0;">
+                <button type="submit" class="btn btn-outline" title="Stop the run after the current safe boundary">Cancel run</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <section id="metrics" class="page-section stats-grid audit-metrics-grid" style="margin-bottom: 1rem; grid-template-columns: repeat(5, minmax(0, 1fr));">
+        <div class="stat-card audit-stat-card"><div class="stat-content"><strong class="stat-value">{{ run.total_repositories }}</strong><p class="audit-stat-label">Repositories</p></div></div>
+        <div class="stat-card audit-stat-card"><div class="stat-content"><strong class="stat-value">{{ run.candidate_repositories }}</strong><p class="audit-stat-label">IaC candidates</p></div></div>
+        <div class="stat-card audit-stat-card"><div class="stat-content"><strong class="stat-value">{{ run.scanned_repositories }}</strong><p class="audit-stat-label">Scanned</p></div></div>
+        <div class="stat-card audit-stat-card"><div class="stat-content"><strong class="stat-value">{{ run.uploaded_repositories }}</strong><p class="audit-stat-label">Uploaded</p></div></div>
+        <div class="stat-card error audit-stat-card"><div class="stat-content"><strong class="stat-value">{{ run.findings_count }}</strong><p class="audit-stat-label">Findings</p></div></div>
+    </section>
+
+    {% if run.status in ['queued', 'running'] %}
+    <section id="status" class="page-section cscan-status-bar" style="margin-bottom: 1rem;">
+        {{ iac_ui.status_badge(run.status) }}
+        <span id="iac-progress" style="color: var(--text-secondary);">{{ run.scanned_repositories }}/{{ run.total_repositories }} repositories scanned</span>
+    </section>
+    {% elif run.status == 'failed' and run.error_text %}
+    <section id="status" class="page-section cscan-error-box" style="margin-bottom: 1rem;">
+        <strong>Run failed</strong>
+        <pre class="iac-error-log">{{ run.error_text }}</pre>
+    </section>
+    {% else %}
+    <section id="status" class="page-section cscan-status-bar" style="margin-bottom: 1rem;">
+        {{ iac_ui.status_badge(run.status) }}
+        <span style="color: var(--text-secondary);">Run completed.</span>
+    </section>
+    {% endif %}
+
+    <section id="repositories" class="page-section table-container has-responsive-table" aria-label="IaC run repository results">
+        <h2 id="iac-run-repositories-title" class="visually-hidden">IaC run repositories</h2>
+        {% call data_surfaces.responsive_table('iac-run-repositories-table', 'iac-run-repositories-title', 'xwide') %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Repository</th>
+                    <th>Finder</th>
+                    <th>IaC</th>
+                    <th>Scan</th>
+                    <th>Severity</th>
+                    <th>ASOC</th>
+                    <th>Error</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for repo in repos %}
+                <tr>
+                    <td><a href="/iac/repositories/{{ repo.id }}" title="Open scan details">{{ repo.project_path }}</a></td>
+                    <td>{{ iac_ui.status_badge(repo.finder_status) }}</td>
+                    <td>
+                        {% if repo.has_iac %}
+                            <span class="pill success">Yes</span>
+                            {% if repo.iac_markers %}<small>{{ repo.iac_markers }}</small>{% endif %}
+                        {% else %}
+                            <span class="no-data">No</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ iac_ui.status_badge(repo.scan_status) }}</td>
+                    <td>{{ iac_ui.severity_pills(repo.critical_count, repo.high_count, repo.medium_count) }}</td>
+                    <td>{{ iac_ui.status_badge(repo.asoc_upload_status) }}</td>
+                    <td>{% if repo.error_text %}<details class="iac-error-details"><summary>{{ repo.error_text.splitlines()[0]|truncate(80) }}</summary><pre class="iac-error-log">{{ repo.error_text }}</pre></details>{% else %}<span class="no-data">-</span>{% endif %}</td>
+                    <td>
+                        <form method="post" action="/iac/repositories/{{ repo.id }}/rescan" style="margin:0;">
+                            <button type="submit" class="btn btn-outline btn-sm" title="Rescan this repository">{{ icons.icon('rotate', 'icon-sm') }} Rescan</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not repos %}
+                <tr><td colspan="8"><span class="no-data">Worker has not discovered repositories for this run yet.</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+        {% endcall %}
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if run.status in ['queued', 'running'] %}
+<script>
+(function pollIacRun() {
+    fetch('/iac/scan-status?run_id={{ run.id }}', {cache: 'no-store'})
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+            if (payload.run && !['queued', 'running'].includes(payload.run.status)) {
+                window.location.reload();
+                return;
+            }
+            if (payload.run) {
+                var progress = document.getElementById('iac-progress');
+                if (progress) progress.textContent = payload.run.scanned_repositories + '/' + payload.run.total_repositories + ' repositories scanned';
+            }
+            setTimeout(pollIacRun, 5000);
+        })
+        .catch(function () { setTimeout(pollIacRun, 5000); });
+}());
+</script>
+{% endif %}
+{% endblock %}

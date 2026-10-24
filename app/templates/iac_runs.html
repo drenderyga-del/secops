@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'iac_macros.html' as iac_ui %}
+
+{% block title %}IaC Runs - DevSecOps Platform{% endblock %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>IaC Runs</h1>
+            <p>History of group/subgroup IaC scans.</p>
+        </div>
+        {{ iac_ui.iac_tabs(active_tab) }}
+    </div>
+    <section id="runs" class="page-section table-container" tabindex="0" aria-label="IaC scan runs">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Run</th>
+                    <th>Target</th>
+                    <th>Trigger</th>
+                    <th>Status</th>
+                    <th>Repositories</th>
+                    <th>IaC</th>
+                    <th>Scanned</th>
+                    <th>Uploaded</th>
+                    <th>Findings</th>
+                    <th>Finished</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td><a href="/iac/runs/{{ run.id }}">#{{ run.id }}</a></td>
+                    <td><code>{{ run.target_label }}</code></td>
+                    <td>{% if run.is_rescan %}<span class="badge badge-warning" title="Single-repository scan retry">rescan</span>{% else %}<span class="badge badge-muted">{{ run.trigger }}</span>{% endif %}</td>
+                    <td>{{ iac_ui.status_badge(run.status) }}{% if run.status in ['queued', 'running'] %}<form method="post" action="/iac/runs/{{ run.id }}/cancel" style="margin:.35rem 0 0;"><button type="submit" class="btn btn-outline btn-sm">Cancel</button></form>{% endif %}</td>
+                    <td><span class="badge">{{ run.total_repositories }}</span></td>
+                    <td><span class="badge">{{ run.candidate_repositories }}</span></td>
+                    <td><span class="badge">{{ run.scanned_repositories }}</span></td>
+                    <td><span class="badge">{{ run.uploaded_repositories }}</span></td>
+                    <td><span class="badge {% if run.findings_count %}badge-danger{% endif %}">{{ run.findings_count }}</span></td>
+                    <td>{% if run.finished_at %}<span class="timestamp">{{ run.finished_at|localtime('%Y-%m-%d %H:%M') }}</span>{% else %}<span class="no-data">-</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+                {% if not runs %}
+                <tr><td colspan="10"><span class="no-data">No IaC runs yet.</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

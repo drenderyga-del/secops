@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'iac_macros.html' as iac_ui %}
+
+{% block title %}IaC Findings - DevSecOps Platform{% endblock %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>{{ page_title or rule_id }}</h1>
+            <p>{{ page_description or title }}</p>
+        </div>
+        {{ iac_ui.iac_tabs(active_tab) }}
+        <div class="page-actions">
+            {% if badge_text != 'ALL' %}
+            <span class="pill failed">{{ badge_text or severity|upper }}</span>
+            {% else %}
+            <span class="pill">{{ total }} active findings</span>
+            {% endif %}
+        </div>
+    </div>
+    <section id="findings" class="page-section table-container" tabindex="0" aria-label="IaC findings">
+        <form method="get" action="/iac/findings" class="filter-bar signal-filter-surface" aria-label="Filter IaC findings">
+            <input type="hidden" name="page" value="1">
+            {% if rule_id %}<input type="hidden" name="rule_id" value="{{ rule_id }}">{% endif %}
+            {% if title %}<input type="hidden" name="title" value="{{ title }}">{% endif %}
+            <div class="filter-field select-field">
+                <label for="iac-findings-severity">Severity</label>
+                <div class="select"><select id="iac-findings-severity" name="severity"><option value="">All severities</option>{% for value in ['critical', 'high', 'medium', 'low', 'info'] %}<option value="{{ value }}" {% if severity == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}</select></div>
+            </div>
+            <div class="filter-field">
+                <label for="iac-findings-rule">Rule</label>
+                <div class="filter-input-wrap"><input id="iac-findings-rule" type="search" name="rule" value="{{ rule }}" placeholder="CKV_..." autocomplete="off"></div>
+            </div>
+            <div class="filter-field">
+                <label for="iac-findings-project">Repository</label>
+                <div class="filter-input-wrap"><input id="iac-findings-project" type="search" name="project" value="{{ project }}" placeholder="group/repo" autocomplete="off"></div>
+            </div>
+            <div class="filter-field select-field">
+                <label for="iac-findings-scanner">Scanner</label>
+                <div class="select"><select id="iac-findings-scanner" name="scanner"><option value="">All scanners</option><option value="checkov" {% if scanner == 'checkov' %}selected{% endif %}>Checkov</option><option value="kics" {% if scanner == 'kics' %}selected{% endif %}>KICS</option></select></div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn btn-ghost btn-sm" type="submit">{{ icons.icon('search', 'icon-sm') }}<span>Apply</span></button>
+                <a class="btn btn-outline btn-sm" href="/iac/findings">{{ icons.icon('rotate', 'icon-sm') }}<span>Reset</span></a>
+            </div>
+        </form>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Finding</th>
+                    <th>Repository</th>
+                    <th>File</th>
+                    <th>Line</th>
+                    <th>Evidence</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for finding in findings %}
+                <tr>
+                    <td>
+                        <div class="iac-findings-table-identity">
+                            <span class="status-badge {% if finding.severity|lower in ['critical', 'high'] %}error{% elif finding.severity|lower == 'medium' %}warning{% else %}unknown{% endif %}">{{ finding.severity }}</span>
+                            <strong>{{ finding.rule_id }}</strong>
+                            <small>{{ finding.title }}</small>
+                        </div>
+                    </td>
+                    <td><a href="{{ finding.project_url }}" target="_blank" rel="noopener noreferrer">{{ finding.project_path }}</a></td>
+                    <td><code>{{ finding.file_path or '-' }}</code></td>
+                    <td>{{ finding.line or '-' }}</td>
+                    <td>
+                        {% if finding.evidence %}<small title="{{ finding.evidence }}">{{ finding.evidence|truncate(120) }}</small>{% endif %}
+                        <a class="iac-finding-evidence-link" href="/iac/repositories/{{ finding.scan_repository_id }}">Open repository evidence</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not findings %}
+                <tr><td colspan="5"><span class="no-data">No active findings for this group.</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+        <nav class="pagination" aria-label="IaC findings pagination" style="margin-top: 1rem;">
+            {% if page > 1 %}<a class="btn btn-outline btn-sm" href="/iac/findings?page={{ page - 1 }}{{ query_suffix }}">Previous</a>{% endif %}
+            <span class="pagination-info">Page {{ page }} / {{ total_pages }} ({{ total }} findings)</span>
+            {% if page < total_pages %}<a class="btn btn-outline btn-sm" href="/iac/findings?page={{ page + 1 }}{{ query_suffix }}">Next</a>{% endif %}
+        </nav>
+    </section>
+</div>
+{% endblock %}

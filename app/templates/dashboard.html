@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Overview · ScanOps{% endblock %}
+
+{% block content %}
+<div class="dashboard signal-dashboard">
+    {% set telemetry_state = topology.telemetry_state or 'empty' %}
+    <header class="page-header signal-page-header signal-overview-header">
+        <div>
+            <span class="page-eyebrow">Operational signal</span>
+            <h1>
+                {% if topology.telemetry_state == 'live' %}
+                Everything is moving.
+                {% elif topology.telemetry_state == 'stale' %}
+                Signal needs attention.
+                {% else %}
+                Waiting for first signal.
+                {% endif %}
+            </h1>
+            <p>Success, failures and delivery evidence across {{ stats.total_repositories }} targets and {{ stats.total_products }} products.</p>
+        </div>
+        <div class="overview-header-actions">
+            <form class="signal-window-control" method="get">
+                <label for="overview-timeframe">Observation window</label>
+                <select id="overview-timeframe" name="timeframe" data-auto-submit="true">
+                    {% for option in chart_timeframes %}
+                    <option value="{{ option.value }}" {% if option.value == selected_timeframe %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="tool" value="{{ selected_tool }}">
+            </form>
+            <span class="overview-live-state overview-live-state-{{ topology.telemetry_state or 'empty' }}" aria-label="Telemetry state: {{ topology.telemetry_state or 'empty' }}">
+                <i aria-hidden="true"></i>
+                <span data-topology-state>{{ topology.telemetry_state or 'empty' }}</span>
+            </span>
+        </div>
+    </header>
+
+    <section
+        class="overview-action-strip overview-action-strip-{{ overview_signal.tone }}"
+        data-overview-signal
+        data-iac-attention="{{ iac_compact.critical + iac_compact.high }}"
+        data-coverage-gaps="{{ audit_compact.secpipe_missing + audit_compact.secpipe_present_not_working }}"
+        aria-live="polite"
+    >
+        <span class="overview-action-indicator" aria-hidden="true"></span>
+        <div class="overview-action-copy">
+            <strong data-overview-signal-title>{{ overview_signal.title }}</strong>
+            <span data-overview-signal-context>{{ overview_signal.context }}</span>
+        </div>
+        <a href="{{ overview_signal.action_href }}" class="overview-action-link" data-overview-signal-action>{{ overview_signal.action_label }}</a>
+    </section>
+
+    <section class="river-command-grid" aria-label="Operational command surface">
+        <div class="river-panel river-topology-panel{% if topology.telemetry_state == 'stale' %} is-stale{% elif topology.telemetry_state == 'empty' %} is-empty{% endif %}" data-topology-url="/dashboard/topology?timeframe={{ selected_timeframe }}">
+            <div class="river-panel-heading">
+                <div>
+                    <span class="river-label">System pulse</span>
+                    <h2>Execution river</h2>
+                    <p class="river-topology-status" aria-live="polite"><span aria-hidden="true"></span><b data-topology-metric="observed_steps">{{ topology.observed_steps }}</b> observed steps · {{ topology.execution_timeframe_label }}</p>
+                </div>
+                <a href="/logs?timeframe={{ selected_timeframe }}" class="river-text-link">Open executions {{ icons.icon('arrow-right', 'icon-sm') }}</a>
+            </div>
+
+            <div class="topology-outcome-grid" aria-label="Execution outcomes">
+                <a href="/pipelines?status=completed&amp;timeframe={{ topology.execution_timeframe }}" class="topology-outcome topology-outcome-success" aria-label="Open completed pipeline executions for {{ topology.execution_timeframe_label }}">
+                    <span class="topology-outcome-label">Pipeline success</span>
+                    <strong><b data-topology-metric="success_rate">{{ topology.success_rate }}</b><small>%</small></strong>
+                    <span class="topology-outcome-context"><b data-topology-metric="execution_completed">{{ topology.execution_completed }}</b> completed of <b data-topology-metric="execution_total">{{ topology.execution_total }}</b> terminal pipelines · {{ topology.execution_timeframe_label }}</span>
+                </a>
+                <a href="/pipelines?status=failed&amp;timeframe={{ topology.execution_timeframe }}" class="topology-outcome topology-outcome-failed" aria-label="Open failed pipeline executions for {{ topology.execution_timeframe_label }}">
+                    <span class="topology-outcome-label">Pipeline failures</span>
+                    <strong><b data-topology-metric="failure_rate">{{ topology.failure_rate }}</b><small>%</small></strong>
+                    <span class="topology-outcome-context"><b data-topology-metric="execution_failed">{{ topology.execution_failed }}</b> failed of <b data-topology-metric="execution_total">{{ topology.execution_total }}</b> terminal pipelines · {{ topology.execution_timeframe_label }}</span>
+                </a>
+                <a href="/logs?timeframe={{ selected_timeframe }}" class="topology-outcome topology-outcome-neutral" aria-label="Open {{ topology.observed_steps }} observed execution steps">
+                    <span class="topology-outcome-label">Observed steps</span>
+                    <strong><b data-topology-metric="observed_steps">{{ topology.observed_steps }}</b></strong>
+                    <span class="topology-outcome-context"><b data-topology-metric="execution_total">{{ topology.execution_total }}</b> terminal pipelines in window</span>
+                </a>
+                <a href="/targets?level=product" class="topology-outcome topology-outcome-delivery" aria-label="Open ASOC product mapping">
+                    <span class="topology-outcome-label">Normalized records</span>
+                    <strong><b data-topology-metric="normalized_outputs">{{ topology.normalized_outputs }}</b></strong>
+                    <span class="topology-outcome-context"><b data-topology-metric="asoc_mapped_products">{{ topology.asoc_mapped_products }}</b> of <b data-topology-metric="total_products">{{ topology.total_products }}</b> products mapped to ASOC</span>
+                </a>
+            </div>
+
+            <div class="execution-river" aria-label="Security execution lifecycle from GitLab signal to ASOC delivery">
+                <span class="river-rail" aria-hidden="true"></span>
+                <a
+                    href="{{ targets_url('product') }}"
+                    class="river-stage river-stage-{% if telemetry_state == 'stale' %}stale{% elif telemetry_state == 'empty' %}idle{% elif topology.gitlab_triggers %}complete{% else %}idle{% endif %}"
+                    data-river-stage="source"
+                    aria-label="Source: GitLab signals accepted for observed targets"
+                >
+                    <span class="river-stage-card">
+                        <span class="river-stage-index">01 / Source</span>
+                        <span class="river-stage-copy">
+                            <strong>GitLab pipelines</strong>
+                            <em><b data-topology-metric="gitlab_triggers">{{ topology.gitlab_triggers }}</b> pipelines · <b data-topology-metric="target_count">{{ topology.target_count }}</b> targets</em>
+                            <span class="river-stage-state" data-river-state-label>{% if telemetry_state == 'stale' %}last known{% elif telemetry_state == 'empty' %}waiting{% elif topology.gitlab_triggers %}complete{% else %}waiting{% endif %}</span>
+                        </span>
+                    </span>
+                    <span class="river-node river-node-source"></span>
+                </a>
+                <a
+                    href="/pipelines"
+                    class="river-stage river-stage-{% if telemetry_state == 'stale' %}stale{% elif telemetry_state == 'empty' %}idle{% elif topology.active_pipelines %}active{% elif topology.execution_total %}complete{% else %}idle{% endif %}"
+                    data-river-stage="queue"
+                    aria-label="Queue: security work waiting for or assigned to workers"
+                >
+                    <span class="river-stage-card">
+                        <span class="river-stage-index">02 / Queue</span>
+                        <span class="river-stage-copy">
+                            <strong>Worker queue</strong>
+                            <em><b data-topology-metric="active_pipelines">{{ topology.active_pipelines }}</b> active pipelines</em>
+                            <span class="river-stage-state" data-river-state-label>{% if telemetry_state == 'stale' %}last known{% elif telemetry_state == 'empty' %}waiting{% elif topology.active_pipelines %}active{% elif topology.execution_total %}complete{% else %}waiting{% endif %}</span>
+                        </span>
+                    </span>
+                    <span class="river-node"></span>
+                </a>
+                <a
+                    href="{% if topology.execution_failed %}/logs?status=failed&amp;timeframe={{ selected_timeframe }}{% else %}/scanners{% endif %}"
+                    class="river-stage river-stage-{% if telemetry_state == 'stale' %}stale{% elif telemetry_state == 'empty' %}idle{% elif topology.execution_failed %}problem{% elif topology.active_pipelines %}active{% elif topology.execution_total %}complete{% else %}idle{% endif %}"
+                    data-river-stage="controls"
+                    aria-label="Controls: security scanners executing or reporting outcomes"
+                >
+                    <span class="river-stage-card">
+                        <span class="river-stage-index">03 / Controls</span>
+                        <span class="river-stage-copy">
+                            <strong>Security controls</strong>
+                            <em><b data-topology-metric="execution_failed">{{ topology.execution_failed }}</b> failed · <b data-topology-metric="execution_total">{{ topology.execution_total }}</b> terminal</em>
+                            <span class="river-stage-state" data-river-state-label>{% if telemetry_state == 'stale' %}last known{% elif telemetry_state == 'empty' %}waiting{% elif topology.execution_failed %}attention{% elif topology.active_pipelines %}active{% elif topology.execution_total %}complete{% else %}waiting{% endif %}</span>
+                        </span>
+                    </span>
+                    <span class="river-node"></span>
+                </a>
+                <a
+                    href="/logs"
+                    class="river-stage river-stage-{% if telemetry_state == 'stale' %}stale{% elif telemetry_state == 'empty' %}idle{% elif topology.normalized_outputs %}complete{% elif topology.execution_completed %}warning{% else %}idle{% endif %}"
+                    data-river-stage="evidence"
+                    aria-label="Evidence: raw scanner outputs normalized into ScanOps records"
+                >
+                    <span class="river-stage-card">
+                        <span class="river-stage-index">04 / Evidence</span>
+                        <span class="river-stage-copy">
+                            <strong>Normalized evidence</strong>
+                            <em><b data-topology-metric="normalized_outputs">{{ topology.normalized_outputs }}</b> records</em>
+                            <span class="river-stage-state" data-river-state-label>{% if telemetry_state == 'stale' %}last known{% elif telemetry_state == 'empty' %}waiting{% elif topology.normalized_outputs %}complete{% elif topology.execution_completed %}warning{% else %}waiting{% endif %}</span>
+                        </span>
+                    </span>
+                    <span class="river-node"></span>
+                </a>
+                <a
+                    href="/targets?level=product"
+                    class="river-stage river-stage-{% if telemetry_state == 'stale' %}stale{% elif telemetry_state == 'empty' %}idle{% elif topology.total_products and topology.asoc_mapped_products >= topology.total_products %}complete{% elif topology.total_products %}warning{% else %}idle{% endif %}"
+                    data-river-stage="delivery"
+                    aria-label="Delivery: normalized evidence mapped and delivered to ASOC"
+                >
+                    <span class="river-stage-card">
+                        <span class="river-stage-index">05 / Delivery</span>
+                        <span class="river-stage-copy">
+                            <strong>ASOC delivery</strong>
+                            <em><b data-topology-metric="asoc_mapped_products">{{ topology.asoc_mapped_products }}</b> / <b data-topology-metric="total_products">{{ topology.total_products }}</b> products</em>
+                            <span class="river-stage-state" data-river-state-label>{% if telemetry_state == 'stale' %}last known{% elif telemetry_state == 'empty' %}waiting{% elif topology.total_products and topology.asoc_mapped_products >= topology.total_products %}complete{% elif topology.total_products %}warning{% else %}waiting{% endif %}</span>
+                        </span>
+                    </span>
+                    <span class="river-node river-node-delivery"></span>
+                </a>
+
+                <div class="river-flow-foot" aria-hidden="true"><span>Source signal</span><span>Active control plane</span><span>Verified evidence</span></div>
+            </div>
+
+            <div class="river-health-strip">
+                <a href="/logs?timeframe={{ selected_timeframe }}"><span>Latest execution</span><strong><time data-topology-last-execution datetime="{{ topology.last_execution_at or '' }}">{{ topology.last_execution_label or 'not recorded' }}</time></strong></a>
+                <a href="/dashboard/duration?timeframe={{ selected_timeframe }}&tool={{ selected_tool }}"><span>Average flow</span><strong>{{ pipeline_duration.avg_label }}</strong></a>
+                <a href="{{ coverage_url }}"><span>Controls active</span><strong>{{ audit_compact.secpipe_working }} / {{ audit_compact.total }}</strong></a>
+            </div>
+        </div>
+
+        <aside class="river-panel attention-panel" aria-labelledby="attention-title">
+            <div class="river-panel-heading">
+                <div>
+                    <span class="river-label">Attention queue</span>
+                    <h2 id="attention-title">Resolve next</h2>
+                </div>
+                <span class="attention-total">{{ stats.failed_jobs_count + config_scan_compact.open_findings + iac_compact.critical + iac_compact.high }}</span>
+            </div>
+
+            <a href="/logs?status=failed&amp;timeframe={{ selected_timeframe }}" class="attention-row{% if stats.failed_jobs_count %} has-problem{% endif %}">
+                <span class="attention-signal" aria-hidden="true">!</span>
+                <span><strong>Failed jobs</strong><small>{{ topology.execution_failed }} failed pipelines · signal {{ topology.last_execution_label }}</small></span>
+                <b>{{ stats.failed_jobs_count }}</b>
+            </a>
+            <a href="/config-scan" class="attention-row{% if config_scan_compact.open_findings %} has-warning{% endif %}">
+                <span class="attention-signal" aria-hidden="true">↯</span>
+                <span><strong>Configuration drift</strong><small>Across {{ config_scan_compact.products_scanned }} scanned products</small></span>
+                <b>{{ config_scan_compact.open_findings }}</b>
+            </a>
+            <a href="/iac" class="attention-row{% if iac_compact.critical + iac_compact.high %} has-problem{% endif %}">
+                <span class="attention-signal" aria-hidden="true">↑</span>
+                <span><strong>IaC critical / high</strong><small>Across {{ iac_compact.scanned_repositories }} scanned repositories</small></span>
+                <b>{{ iac_compact.critical + iac_compact.high }}</b>
+            </a>
+            <a href="{{ coverage_url }}" class="attention-row{% if audit_compact.secpipe_missing + audit_compact.secpipe_present_not_working %} has-warning{% endif %}">
+                <span class="attention-signal" aria-hidden="true">◇</span>
+                <span><strong>Coverage gaps</strong><small>Across {{ audit_compact.total }} observed targets</small></span>
+                <b>{{ audit_compact.secpipe_missing + audit_compact.secpipe_present_not_working }}</b>
+            </a>
+            {% if not stats.failed_jobs_count and not config_scan_compact.open_findings and not iac_compact.critical and not iac_compact.high %}
+            <p class="attention-calm"><i aria-hidden="true"></i>No critical execution backlog</p>
+            {% endif %}
+        </aside>
+    </section>
+
+    <section id="activity" class="signal-telemetry-grid">
+        <div class="river-panel telemetry-chart-panel">
+            <div class="river-panel-heading telemetry-heading">
+                <div>
+                    <span class="river-label">Execution throughput</span>
+                    <h2>Execution volume</h2>
+                </div>
+                <form class="chart-range-form" method="get">
+                    <input type="hidden" name="timeframe" value="{{ selected_timeframe }}">
+                    <div class="select">
+                        <select id="chart-tool" name="tool" data-auto-submit="true" aria-label="Security tool">
+                            {% for option in chart_tools %}
+                            <option value="{{ option.value }}" {% if option.value == selected_tool %}selected{% endif %}>{{ option.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="throughput-summary" aria-label="Execution totals for the selected window">
+                <span class="throughput-total"><b>{{ chart_summary.total }}</b><small>Total</small></span>
+                <span class="throughput-success"><i aria-hidden="true"></i><b>{{ chart_summary.successful }}</b><small>Successful</small></span>
+                <span class="throughput-failed"><i aria-hidden="true"></i><b>{{ chart_summary.failed }}</b><small>Failed</small></span>
+                <span class="throughput-rate"><b>{{ chart_summary.failure_rate }}%</b><small>Failure rate</small></span>
+                <span class="throughput-current"><i aria-hidden="true"></i><small>Current interval</small></span>
+            </div>
+            <div class="dashboard-chart-surface signal-chart-surface">
+                <canvas
+                    id="pipelineChart"
+                    data-chart='{{ chart_data | tojson }}'
+                    role="img"
+                    tabindex="0"
+                    aria-label="Stacked execution throughput chart. {{ chart_summary.successful }} successful and {{ chart_summary.failed }} failed executions."
+                ></canvas>
+            </div>
+        </div>
+
+        <div class="river-panel performance-panel">
+            <div class="river-panel-heading">
+                <div>
+                    <span class="river-label">Performance pulse</span>
+                    <h2>Latency envelope</h2>
+                </div>
+                <a href="/dashboard/duration?timeframe={{ selected_timeframe }}&tool={{ selected_tool }}" class="river-text-link">Details</a>
+            </div>
+            <div class="latency-orbit" aria-hidden="true">
+                <span class="latency-orbit-ring latency-orbit-ring-outer"></span>
+                <span class="latency-orbit-ring latency-orbit-ring-inner"></span>
+                <i></i>
+                <strong>{{ pipeline_duration.median_label }}</strong>
+                <small>median flow</small>
+            </div>
+            <p class="latency-context">
+                <span><b>{{ pipeline_duration.count }}</b> terminal pipelines</span>
+                <span>P95 tail <b>+{{ pipeline_duration.p95_tail_label }}</b></span>
+            </p>
+            <dl class="performance-list">
+                <div><dt>Average pipeline</dt><dd>{{ pipeline_duration.avg_label }}</dd></div>
+                <div><dt>Median pipeline</dt><dd>{{ pipeline_duration.median_label }}</dd></div>
+                <div class="performance-alert"><dt>P95 pipeline</dt><dd>{{ pipeline_duration.p95_label }}</dd></div>
+                <div><dt>Average scanner step</dt><dd>{{ job_duration.avg_label }}</dd></div>
+            </dl>
+            <div class="scanner-duration-list">
+                {% for item in job_duration_breakdown %}
+                <span><b>{{ item.label }}</b><em>{{ item.summary.avg_label }}</em></span>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

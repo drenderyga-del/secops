@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/coverage_metrics.html' as coverage %}
+
+{% block title %}{{ product.name }} · Coverage · ScanOps{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ product.name }} coverage</h1>
+        <p>Coverage-only repository drilldown for this product target.</p>
+        <div class="page-actions">
+            <a class="btn btn-secondary" href="{{ product_target_url(product.id) }}">Open product target</a>
+        </div>
+    </div>
+</div>
+
+<form id="filters" method="get" action="{{ product_coverage_url(product.id) }}" class="page-section filter-bar signal-filter-surface" aria-label="Filter coverage results">
+    <div class="filter-context">
+        {% if group_url %}
+        <a class="audit-product-link" href="{{ group_url }}" target="_blank" rel="noopener noreferrer">{{ group_path }}</a>
+        {% elif group_path %}
+        <span class="audit-product-link">{{ group_path }}</span>
+        {% endif %}
+    </div>
+    <input type="hidden" name="status" value="all">
+    <div class="filter-field select-field">
+        <label for="coverage-product-view">View</label>
+        <div class="select">
+            <select id="coverage-product-view" name="only_problems" data-auto-submit="true">
+                <option value="false" {% if not only_problems %}selected{% endif %}>All repositories</option>
+                <option value="true" {% if only_problems %}selected{% endif %}>Problems only</option>
+            </select>
+        </div>
+    </div>
+</form>
+
+<section id="metrics" class="page-section audit-coverage">
+    {{ coverage.coverage_metrics(
+        coverage_metrics,
+        filter_active=coverage_filter_active,
+        matching_count=matching_count,
+        total_count=counts.total
+    ) }}
+</section>
+
+<section id="repositories" class="page-section table-container" tabindex="0" aria-label="Product coverage repositories">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Repository</th>
+                <th>Host</th>
+                <th>Status</th>
+                <th>Pipelines (window)</th>
+                <th>Security Jobs</th>
+                <th>Last Pipeline</th>
+                <th>Reason</th>
+                <th>Target</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            {% set snapshot = row.snapshot %}
+            {% set repo = row.repository %}
+            {% set meta = status_meta[snapshot.status.value] %}
+            <tr>
+                <td>
+                    {% if repo.web_url %}
+                    <a href="{{ repo.web_url }}" target="_blank" rel="noopener noreferrer">{{ repo.path_with_namespace }}</a>
+                    {% else %}
+                    {{ repo.path_with_namespace }}
+                    {% endif %}
+                </td>
+                <td>{{ repo.instance_host }}</td>
+                <td>
+                    <span class="status-badge {{ meta.class }}">
+                        {{ icons.icon(meta.icon) }}
+                        <span>{{ meta.label }}</span>
+                    </span>
+                </td>
+                <td>{{ snapshot.pipeline_count }}</td>
+                <td>{{ snapshot.security_job_count }}</td>
+                <td>
+                    {% if snapshot.last_pipeline_at %}
+                    <span class="timestamp">{{ snapshot.last_pipeline_at|localtime('%Y-%m-%d %H:%M:%S') }}</span>
+                    {% else %}
+                    <span class="no-data">—</span>
+                    {% endif %}
+                </td>
+                <td>{{ snapshot.reason or '—' }}</td>
+                <td>
+                    {% if row.target_repository %}
+                    <a class="btn btn-ghost btn-sm" href="{{ repository_target_url(row.target_repository.id) }}">Open Target 360</a>
+                    {% else %}
+                    <span class="no-data">Not mapped</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% if not rows %}
+<div class="empty-state">
+    <div class="empty-icon">{{ icons.icon('search', 'icon-lg') }}</div>
+    <h2>No repositories in this view</h2>
+    <p>Try switching to all repositories or run a new scan.</p>
+</div>
+{% endif %}
+{% endblock %}

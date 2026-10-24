@@ -1,0 +1,138 @@
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/cscan_harbor.html' as harbor %}
+
+{% macro cscan_repo_table_rows(repos, findings_run_id) %}
+{% for repo in repos %}
+{% set fs = repo.findings_summary | default({}, true) %}
+{% set row_run_id = repo.findings_run_id | default(findings_run_id, true) %}
+<tr data-repo-path="{{ repo.project_path|lower }}">
+    <td>
+        {% if row_run_id and repo.findings_count > 0 %}
+            <a href="/config-scan/runs/{{ row_run_id }}/findings?project={{ repo.project_path | urlencode }}" class="cscan-repo-path cscan-repo-path--internal">{{ repo.project_path }}</a>
+        {% else %}
+            <span class="cscan-repo-path">{{ repo.project_path }}</span>
+        {% endif %}
+    </td>
+    <td class="cscan-td-num"><span class="badge {% if repo.findings_count %}badge-danger{% endif %}">{{ repo.findings_count }}</span></td>
+    <td class="cscan-td-sev">
+        <div class="cscan-sev-cell cscan-sev-cell--compact">
+            {{ harbor.cscan_harbor_severity(fs) }}
+            <div class="cscan-sev-pills cscan-sev-pills--mini" aria-hidden="true">
+                {% if fs.critical %}<span class="pill pill-sev pill-sev--critical">C:{{ fs.critical }}</span>{% endif %}
+                {% if fs.high %}<span class="pill pill-sev pill-sev--high">H:{{ fs.high }}</span>{% endif %}
+                {% if fs.medium %}<span class="pill pill-sev pill-sev--medium">M:{{ fs.medium }}</span>{% endif %}
+                {% if fs.low %}<span class="pill pill-sev pill-sev--low">L:{{ fs.low }}</span>{% endif %}
+                {% if fs.info %}<span class="pill pill-sev pill-sev--info">I:{{ fs.info }}</span>{% endif %}
+            </div>
+        </div>
+    </td>
+    <td class="cscan-td-num">
+        {% if repo.warnings_count %}
+        <span class="cscan-warn-pill">{{ repo.warnings_count }}</span>
+        {% else %}
+        <span class="cscan-warn-pill cscan-warn-pill--zero">0</span>
+        {% endif %}
+    </td>
+    <td class="cscan-details-cell">
+        {% if row_run_id and repo.findings_count > 0 %}
+        <a href="/config-scan/runs/{{ row_run_id }}/findings?project={{ repo.project_path | urlencode }}" class="btn btn-outline btn-sm cscan-findings-page-link">{{ icons.icon('arrow-right', 'icon-sm') }} Open</a>
+        {% elif repo.findings_count > 0 %}
+        <span class="no-data" title="Open this run from the run page to view findings">—</span>
+        {% else %}
+        <span class="no-data">—</span>
+        {% endif %}
+    </td>
+    <td class="cscan-gitlab-cell">
+        {% if repo.project_url %}
+        <a href="{{ repo.project_url }}" target="_blank" rel="noreferrer" class="btn btn-ghost btn-sm cscan-gitlab-link">{{ icons.icon('arrow-up-right', 'icon-sm') }} GitLab</a>
+        {% else %}
+        <span class="no-data">—</span>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+{% endmacro %}
+
+{% macro cscan_repo_table(repos, findings_run_id) %}
+{% if repos %}
+<div class="table-container cscan-tree-table-wrap" tabindex="0" aria-label="Configuration scan result tree">
+    <table class="data-table cscan-repo-table cscan-repo-table--compact">
+        <thead>
+            <tr>
+                <th class="cscan-col-repo">Repository</th>
+                <th class="cscan-col-num">#</th>
+                <th class="cscan-col-sev">Status</th>
+                <th class="cscan-col-num">Warn</th>
+                <th class="cscan-col-details">Findings</th>
+                <th class="cscan-col-gitlab">GitLab</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ cscan_repo_table_rows(repos, findings_run_id) }}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro cscan_tree_node(node, level, findings_run_id) %}
+{% if level == 0 %}
+<div class="cscan-tree-root-inner">
+    {% if node.repos %}
+    <details open class="cscan-tree-folder cscan-tree-folder--root">
+        <summary class="cscan-tree-folder-summary">
+            <span class="cscan-details-chevron" aria-hidden="true"></span>
+            {{ icons.icon('folder-open', 'icon-sm') }}
+            <span class="cscan-tree-folder-name">{% if node.name == '.' %}Root{% else %}{{ node.name }}{% endif %}</span>
+            <span class="tree-meta">Repos: {{ node.repos_count }} · Findings: {{ node.findings_total }}</span>
+        </summary>
+        <div class="cscan-tree-folder-body">
+            {{ cscan_repo_table(node.repos, findings_run_id) }}
+        </div>
+    </details>
+    {% endif %}
+    {% for child in node.children %}
+        {{ cscan_tree_node(child, level + 1, findings_run_id) }}
+    {% endfor %}
+</div>
+{% else %}
+<div class="cscan-tree-nested cscan-tree-nested--{{ level }}">
+    <details class="cscan-tree-folder" {% if level <= 3 %}open{% endif %}>
+        <summary class="cscan-tree-folder-summary">
+            <span class="cscan-details-chevron" aria-hidden="true"></span>
+            {{ icons.icon('folder', 'icon-sm') }}
+            <span class="cscan-tree-folder-name">{{ node.name }}</span>
+            <span class="tree-meta">Repos: {{ node.repos_count }} · Findings: {{ node.findings_total }}</span>
+        </summary>
+        <div class="cscan-tree-folder-body">
+            {{ cscan_repo_table(node.repos, findings_run_id) }}
+            {% for child in node.children %}
+                {{ cscan_tree_node(child, level + 1, findings_run_id) }}
+            {% endfor %}
+        </div>
+    </details>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% if project_tree and (project_tree.repos_count > 0 or project_tree.children|length > 0) %}
+{% set findings_run_id = cscan_findings_run_id | default(none) %}
+<div class="cscan-tree-section" data-cscan-results-tree>
+    <h2 class="cscan-results-tree-title">{{ icons.icon('diagram', 'icon-sm') }} Results Tree</h2>
+    <p class="cscan-results-hint">Repositories under <code class="cscan-scope-code">{{ cscan_scope_path }}</code>. Repository names open findings in this app; the <strong>GitLab</strong> column opens the repository externally.</p>
+
+    <div class="filter-bar signal-filter-surface cscan-repo-filter" role="search" aria-label="Filter config scan repositories" data-cscan-repo-filter>
+        <div class="filter-field">
+            <label for="cscan-tree-repo-filter">Repository</label>
+            <div class="filter-input-wrap">
+                <input id="cscan-tree-repo-filter" type="search" class="cscan-repo-search-input" placeholder="Filter repositories…" aria-label="Filter repositories" aria-controls="cscan-tree-results" autocomplete="off">
+            </div>
+        </div>
+        <p class="filter-result-count" aria-live="polite"><span data-cscan-repo-visible>0</span> matching repositories</p>
+    </div>
+
+    <div id="cscan-tree-results" class="cscan-tree-root-box">
+        {{ cscan_tree_node(project_tree, 0, findings_run_id) }}
+    </div>
+</div>
+{% endif %}

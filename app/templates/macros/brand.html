@@ -1,0 +1,5 @@
+{% macro mark(size='') -%}
+<span class="scanops-mark{% if size %} {{ size }}{% endif %}" aria-hidden="true">
+    <img src="/static/scanops-mark.svg?v=20260814-scanops-mark-2" alt="" draggable="false">
+</span>
+{%- endmacro %}

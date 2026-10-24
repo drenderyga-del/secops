@@ -1,0 +1,167 @@
+x-secpipe-env: &secpipe-env
+  TZ: ${TZ:-Europe/Moscow}
+  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/security_dashboard
+  GITLAB_API_URL: ${GITLAB_API_URL}
+  ASOC_GITLAB_HOST_PREFIXES: ${ASOC_GITLAB_HOST_PREFIXES:-}
+  PRODUCT_NESTED_NAMESPACES: ${PRODUCT_NESTED_NAMESPACES:-}
+  GITLAB_PAT: ${GITLAB_PAT:-}
+  GITLAB: ${GITLAB:-}
+  GITLAB_INSTANCES: ${GITLAB_INSTANCES:-[]}
+  INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:?INTEGRATION_CREDENTIALS_KEY is required}
+  INTEGRATION_TEST_TIMEOUT_SECONDS: ${INTEGRATION_TEST_TIMEOUT_SECONDS:-10}
+  REQUESTS_CA_BUNDLE: /etc/ssl/cert.pem
+  SSL_CERT_FILE: /etc/ssl/cert.pem
+  IAC_REPORTS_DIR: ${IAC_REPORTS_DIR:-/data/iac_reports}
+  CONFIG_SCAN_REPORTS_DIR: ${CONFIG_SCAN_REPORTS_DIR:-/data/config_scan_reports}
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      TZ: ${TZ:-Europe/Moscow}
+      POSTGRES_DB: security_dashboard
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [secpipe-network]
+
+  app:
+    image: ${SECPIPE_IMAGE:?SECPIPE_IMAGE is required}
+    environment:
+      <<: *secpipe-env
+      PIPE_BEARER_TOKEN: ${PIPE_BEARER_TOKEN:?PIPE_BEARER_TOKEN is required}
+      SCANOPS_AGENT_API_TOKEN: ${SCANOPS_AGENT_API_TOKEN:-}
+      APP_PORT: 8000
+      UI_AUTH_USERNAME: ${UI_AUTH_USERNAME:?UI_AUTH_USERNAME is required}
+      UI_AUTH_PASSWORD: ${UI_AUTH_PASSWORD:?UI_AUTH_PASSWORD is required}
+      CONFIG_SCAN_ENABLED: ${CONFIG_SCAN_ENABLED:-true}
+      CONFIG_SCAN_RUN_BACKGROUND_SCHEDULER: ${CONFIG_SCAN_RUN_BACKGROUND_SCHEDULER:-true}
+      CONFIG_SCAN_FULL_PRODUCT_INTERVAL_SECONDS: ${CONFIG_SCAN_FULL_PRODUCT_INTERVAL_SECONDS:-2592000}
+      CONFIG_SCAN_FULL_PRODUCT_ON_START: ${CONFIG_SCAN_FULL_PRODUCT_ON_START:-false}
+      HEXWAY_URL: ${HEXWAY_URL:-}
+      HEXWAY_TOKEN: ${HEXWAY_TOKEN:-}
+      HEXWAY_SPACE_ID: ${HEXWAY_SPACE_ID:-}
+      HEXWAY_TIMEOUT: ${HEXWAY_TIMEOUT:-30}
+      ASOC_VERIFY_SSL: ${ASOC_VERIFY_SSL:-true}
+      ASOC_PRODUCT_SYNC_INTERVAL_MINUTES: ${ASOC_PRODUCT_SYNC_INTERVAL_MINUTES:-60}
+      PRODUCT_SYNC_GRACE_DAYS: ${PRODUCT_SYNC_GRACE_DAYS:-3}
+      PTAI_URL: ${PTAI_URL:-}
+      PTAI_TOKEN: ${PTAI_TOKEN:-}
+      PTAI_PROJECT_PREFIX: ${PTAI_PROJECT_PREFIX:-vampy-asoc-}
+      PTAI_VERIFY_SSL: ${PTAI_VERIFY_SSL:-true}
+      PTAI_TIMEOUT: ${PTAI_TIMEOUT:-30}
+      HEALTH_WORKER_STALE_SECONDS: ${HEALTH_WORKER_STALE_SECONDS:-1800}
+      HEALTH_PIPELINE_POLL_STALE_SECONDS: ${HEALTH_PIPELINE_POLL_STALE_SECONDS:-900}
+      TOPOLOGY_SIGNAL_STALE_SECONDS: ${TOPOLOGY_SIGNAL_STALE_SECONDS:-86400}
+    ports:
+      - "8081:8000"
+    volumes:
+      - iac_reports:/data/iac_reports
+      - config_scan_reports:/data/config_scan_reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [secpipe-network]
+    restart: unless-stopped
+
+  pipeline_worker:
+    image: ${SECPIPE_IMAGE:?SECPIPE_IMAGE is required}
+    command: ["python", "-m", "app.workers.pipeline"]
+    environment:
+      <<: *secpipe-env
+      PIPELINE_POLL_INTERVAL_SECONDS: ${PIPELINE_POLL_INTERVAL_SECONDS:-300}
+      PIPELINE_POLL_BATCH_SIZE: ${PIPELINE_POLL_BATCH_SIZE:-10}
+      PIPELINE_MAX_AGE_SECONDS: ${PIPELINE_MAX_AGE_SECONDS:-86400}
+      MATTERMOST_WEBHOOK_URL: ${MATTERMOST_WEBHOOK_URL:-}
+      MATTERMOST_ALERT_ICON_URL: ${MATTERMOST_ALERT_ICON_URL:-}
+      SECPIPE_JOB_LONG_ALERT_ENABLED: ${SECPIPE_JOB_LONG_ALERT_ENABLED:-true}
+      SECPIPE_JOB_LONG_ALERT_MINUTES: ${SECPIPE_JOB_LONG_ALERT_MINUTES:-45}
+      SECPIPE_JOB_ALERT_INTERVAL_SECONDS: ${SECPIPE_JOB_ALERT_INTERVAL_SECONDS:-300}
+      SECPIPE_JOB_ALERT_RESEND_MINUTES: ${SECPIPE_JOB_ALERT_RESEND_MINUTES:-0}
+      SECPIPE_RETENTION_DAYS: ${SECPIPE_RETENTION_DAYS:-365}
+      AUDIT_DIGEST_ENABLED: ${AUDIT_DIGEST_ENABLED:-true}
+      AUDIT_DIGEST_INTERVAL_DAYS: ${AUDIT_DIGEST_INTERVAL_DAYS:-7}
+      SECPIPE_PUBLIC_URL: ${SECPIPE_PUBLIC_URL:-http://localhost:8081}
+      ASOC_ENRICH_ENABLED: ${ASOC_ENRICH_ENABLED:-false}
+      ASOC_ENRICH_RAISE_SEVERITY: ${ASOC_ENRICH_RAISE_SEVERITY:-false}
+      EPSS_MIN_SCORE: ${EPSS_MIN_SCORE:-0.5}
+      KEV_FEED_URL: ${KEV_FEED_URL:-}
+      EPSS_FEED_URL: ${EPSS_FEED_URL:-}
+      HEXWAY_URL: ${HEXWAY_URL:-}
+      HEXWAY_TOKEN: ${HEXWAY_TOKEN:-}
+      HEXWAY_SPACE_ID: ${HEXWAY_SPACE_ID:-}
+      HEXWAY_TIMEOUT: ${HEXWAY_TIMEOUT:-30}
+      ASOC_VERIFY_SSL: ${ASOC_VERIFY_SSL:-true}
+      ASOC_PRODUCT_SYNC_INTERVAL_MINUTES: ${ASOC_PRODUCT_SYNC_INTERVAL_MINUTES:-60}
+      PRODUCT_SYNC_GRACE_DAYS: ${PRODUCT_SYNC_GRACE_DAYS:-3}
+      PTAI_URL: ${PTAI_URL:-}
+      PTAI_TOKEN: ${PTAI_TOKEN:-}
+      PTAI_PROJECT_PREFIX: ${PTAI_PROJECT_PREFIX:-vampy-asoc-}
+      PTAI_VERIFY_SSL: ${PTAI_VERIFY_SSL:-true}
+      PTAI_TIMEOUT: ${PTAI_TIMEOUT:-30}
+      PTAI_QUEUE_ALERT_ENABLED: ${PTAI_QUEUE_ALERT_ENABLED:-true}
+      PTAI_QUEUE_ALERT_THRESHOLD: ${PTAI_QUEUE_ALERT_THRESHOLD:-10}
+      PTAI_QUEUE_ALERT_INTERVAL_SECONDS: ${PTAI_QUEUE_ALERT_INTERVAL_SECONDS:-300}
+      PTAI_QUEUE_ALERT_RESEND_MINUTES: ${PTAI_QUEUE_ALERT_RESEND_MINUTES:-60}
+      PTAI_QUEUE_ALERT_STAGES: ${PTAI_QUEUE_ALERT_STAGES:-Enqueued,Queued}
+      PTAI_QUEUE_PROJECT_LIMIT: ${PTAI_QUEUE_PROJECT_LIMIT:-500}
+      PTAI_QUEUE_BRANCH_LIMIT: ${PTAI_QUEUE_BRANCH_LIMIT:-20}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,sys,time; p='/tmp/secpipe-heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<300 else 1)\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [secpipe-network]
+    restart: unless-stopped
+
+  iac_worker:
+    image: ${SECPIPE_IMAGE:?SECPIPE_IMAGE is required}
+    command: ["python", "-m", "app.iac_worker"]
+    environment:
+      <<: *secpipe-env
+      IAC_WORKER_ENABLED: ${IAC_WORKER_ENABLED:-true}
+      IAC_WORKER_INTERVAL_SECONDS: ${IAC_WORKER_INTERVAL_SECONDS:-10}
+      IAC_GITLAB_REQUEST_TIMEOUT: ${IAC_GITLAB_REQUEST_TIMEOUT:-30}
+      IAC_CLONE_TIMEOUT_SECONDS: ${IAC_CLONE_TIMEOUT_SECONDS:-600}
+      IAC_CHECKOV_TIMEOUT_SECONDS: ${IAC_CHECKOV_TIMEOUT_SECONDS:-900}
+      IAC_WORK_DIR: ${IAC_WORK_DIR:-/tmp}
+      HEXWAY_TOKEN: ${HEXWAY_TOKEN:-}
+      HEXWAY_URL: ${HEXWAY_URL:-}
+      HEXWAY_SPACE_ID: ${HEXWAY_SPACE_ID:-}
+      HEXWAY_TIMEOUT: ${HEXWAY_TIMEOUT:-30}
+      ASOC_VERIFY_SSL: ${ASOC_VERIFY_SSL:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,sys,time; p='/tmp/secpipe-heartbeat'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<1800 else 1)\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - iac_reports:/data/iac_reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [secpipe-network]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  iac_reports:
+  config_scan_reports:
+
+networks:
+  secpipe-network:
+    driver: bridge

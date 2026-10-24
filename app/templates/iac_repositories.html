@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/data_surfaces.html' as data_surfaces %}
+{% import 'iac_macros.html' as iac_ui %}
+
+{% block title %}IaC Repositories - DevSecOps Platform{% endblock %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>IaC Repositories</h1>
+            <p>Latest IaC state per repository.</p>
+        </div>
+        {{ iac_ui.iac_tabs(active_tab) }}
+    </div>
+    <section id="repositories" class="page-section table-container has-responsive-table" aria-label="IaC repository inventory">
+        <div class="chart-header">
+            <div class="chart-title">
+                <h2 id="iac-repositories-title">Repositories</h2>
+                <p class="chart-subtitle">{{ total }} repositories, page {{ page }} of {{ total_pages }}.</p>
+            </div>
+        </div>
+        <form method="get" action="/iac/repositories" class="filter-bar signal-filter-surface" aria-label="Filter IaC repositories">
+            <input type="hidden" name="page" value="1">
+            <div class="filter-field">
+                <label for="iac-repositories-search">Search</label>
+                <div class="filter-input-wrap">
+                    <input id="iac-repositories-search" type="search" name="q" value="{{ q }}" placeholder="group/repository">
+                </div>
+            </div>
+            <div class="filter-field select-field">
+                <label for="iac-filter">IaC</label>
+                <div class="select"><select id="iac-filter" name="iac"><option value="all" {% if iac == 'all' %}selected{% endif %}>All</option><option value="yes" {% if iac == 'yes' %}selected{% endif %}>IaC only</option><option value="no" {% if iac == 'no' %}selected{% endif %}>No IaC</option></select></div>
+            </div>
+            <div class="filter-field select-field">
+                <label for="scan-status-filter">Scan</label>
+                <div class="select"><select id="scan-status-filter" name="scan_status"><option value="">All</option>{% for status in scan_statuses %}<option value="{{ status }}" {% if scan_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></div>
+            </div>
+            <div class="filter-field select-field">
+                <label for="asoc-status-filter">ASOC</label>
+                <div class="select"><select id="asoc-status-filter" name="asoc_status"><option value="">All</option>{% for status in asoc_statuses %}<option value="{{ status }}" {% if asoc_status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></div>
+            </div>
+            <label class="filter-check">
+                <input type="checkbox" name="has_important_findings" value="yes" {% if has_important_findings %}checked{% endif %}>
+                <span>Critical / High only</span>
+            </label>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-ghost btn-sm">{{ icons.icon('search', 'icon-sm') }}<span>Apply</span></button>
+                <a href="/iac/repositories" class="btn btn-outline btn-sm">{{ icons.icon('rotate', 'icon-sm') }}<span>Reset</span></a>
+            </div>
+        </form>
+        {% if bulk_message %}<div class="cscan-status-bar" style="margin-bottom:1rem;">{{ bulk_message }}</div>{% endif %}
+        <form method="post" action="/iac/repositories/reupload-asoc">
+            <input type="hidden" name="return_to" value="{{ return_to }}">
+            <input type="hidden" name="request_key" value="{{ reupload_request_key }}">
+            <input type="hidden" name="q" value="{{ q }}"><input type="hidden" name="iac" value="{{ iac }}"><input type="hidden" name="scan_status" value="{{ scan_status }}"><input type="hidden" name="has_important_findings" value="{% if has_important_findings %}yes{% endif %}">
+            <div style="margin:0 0 .75rem;display:flex;gap:.5rem;flex-wrap:wrap;"><button type="submit" class="btn btn-secondary btn-sm">{{ icons.icon('arrow-up-right', 'icon-sm') }} Re-upload selected to ASOC</button><button type="submit" formaction="/iac/repositories/reupload-skipped-asoc" class="btn btn-outline btn-sm">Re-upload all skipped with SARIF</button></div>
+        {% call data_surfaces.responsive_table('iac-repositories-table', 'iac-repositories-title', 'xwide') %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ASOC</th>
+                    <th>Repository</th>
+                    <th>IaC</th>
+                    <th>Scan</th>
+                    <th>Severity</th>
+                    <th>ASOC</th>
+                    <th>Run</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for repo in repos %}
+                <tr>
+                    <td>{% if repo.sarif_path %}<input type="checkbox" name="repo_row_ids" value="{{ repo.id }}" aria-label="Select {{ repo.project_path }} for ASOC re-upload">{% else %}<span class="no-data">—</span>{% endif %}</td>
+                    <td><a href="/iac/repositories/{{ repo.id }}" title="Open scan details">{{ repo.project_path }}</a></td>
+                    <td>{% if repo.has_iac %}<span class="pill success">Yes</span>{% else %}<span class="no-data">No</span>{% endif %}</td>
+                    <td>{{ iac_ui.status_badge(repo.scan_status) }}</td>
+                    <td>{{ iac_ui.severity_pills(repo.critical_count, repo.high_count, repo.medium_count) }}</td>
+                    <td>{{ iac_ui.status_badge(repo.asoc_upload_status) }}</td>
+                    <td><a href="/iac/runs/{{ repo.run_id }}">#{{ repo.run_id }}</a></td>
+                    <td>
+                        <button type="submit" formaction="/iac/repositories/{{ repo.id }}/rescan" class="btn btn-outline btn-sm" title="Rescan this repository">{{ icons.icon('rotate', 'icon-sm') }} Rescan</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not repos %}
+                <tr><td colspan="8"><span class="no-data">No repository state yet.</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+        {% endcall %}
+        </form>
+        <div class="pagination" style="margin-top: 1rem;">
+            {% if previous_url %}<a class="btn btn-outline btn-sm" href="{{ previous_url }}">Previous</a>{% endif %}
+            <span class="pagination-info">Page {{ page }} / {{ total_pages }}</span>
+            {% if next_url %}<a class="btn btn-outline btn-sm" href="{{ next_url }}">Next</a>{% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

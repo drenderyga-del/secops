@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Security execution runtime · ScanOps{% endblock %}
+
+{% block content %}
+<div class="scanner-fleet-page">
+    <header class="page-header signal-page-header compact">
+        <div>
+            <span class="page-eyebrow">Scanner fleet</span>
+            <h1>Security execution runtime</h1>
+            <p>Connection readiness, latest execution and seven-day workload for each scanner adapter.</p>
+        </div>
+        <a href="/integrations" class="btn btn-outline">
+            Manage connections in Integrations
+            {{ icons.icon('arrow-right', 'icon-sm') }}
+        </a>
+    </header>
+
+    <section class="fleet-summary-line" aria-label="Security execution runtime summary">
+        <div><span>Runtime adapters</span><strong>{{ scanners|length }}</strong></div>
+        <div><span>Adapters connected</span><strong>{{ ready_connections }} / {{ scanners|length }}</strong></div>
+        <div><span>Latest runs active</span><strong>{{ running_executions }}</strong></div>
+        <div><span>Active pipelines · now</span><strong>{{ active_pipelines }}</strong></div>
+        <div class="{% if failed_steps %}is-danger{% endif %}"><span>Failed steps · 7d</span><strong>{{ failed_steps }}</strong></div>
+    </section>
+
+    <section class="fleet-list" aria-labelledby="fleet-list-title">
+        <div class="river-panel-heading fleet-list-heading">
+            <div>
+                <span class="river-label">Runtime state by source</span>
+                <h2 id="fleet-list-title">Scanner adapters</h2>
+            </div>
+            <a href="/logs?status=failed" class="river-text-link">Failed jobs {{ icons.icon('arrow-right', 'icon-sm') }}</a>
+        </div>
+
+        {% for scanner in scanners %}
+        <article class="scanner-lane">
+            <div class="scanner-lane-identity">
+                <h3>{{ scanner.name }}</h3>
+                <p>{{ scanner.role }}</p>
+                <p class="scanner-lane-description">{{ scanner.description }}</p>
+            </div>
+            <section class="scanner-contract-block" aria-label="{{ scanner.name }} connection">
+                <span class="river-label">Connection</span>
+                <strong class="scanner-contract-status is-{{ scanner.connection.state }}">{{ scanner.connection.label }}</strong>
+                <p>{{ scanner.connection.reason }}</p>
+                <a href="{{ scanner.integration_href }}" class="scanner-contract-link">{{ scanner.integration_action }}</a>
+            </section>
+            <section class="scanner-contract-block" aria-label="{{ scanner.name }} latest run">
+                <span class="river-label">Latest run</span>
+                <strong class="scanner-contract-status is-{{ scanner.latest.state }}">{{ scanner.latest.label }}</strong>
+                {% if scanner.latest.occurred_at %}
+                <time datetime="{{ scanner.latest.occurred_at.isoformat() }}">{{ scanner.latest.occurred_at|localtime('%Y-%m-%d %H:%M MSK') }}</time>
+                {% endif %}
+                <p>{{ scanner.latest.summary }}</p>
+            </section>
+            <section class="scanner-contract-block scanner-workload-block" aria-label="{{ scanner.name }} workload window">
+                <span class="river-label">Workload window</span>
+                <dl class="scanner-lane-metrics">
+                    {% for metric in scanner.workload %}
+                    <div><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></div>
+                    {% endfor %}
+                </dl>
+            </section>
+            <a href="{{ scanner.href }}" class="scanner-lane-action" data-action="drilldown">{{ scanner.action }} {{ icons.icon('arrow-right', 'icon-sm') }}</a>
+        </article>
+        {% endfor %}
+    </section>
+
+    <p class="fleet-contract-note">This page reports runtime state only. Manage connection endpoints, tests and credentials in <a href="/integrations">Integrations</a>.</p>
+</div>
+{% endblock %}

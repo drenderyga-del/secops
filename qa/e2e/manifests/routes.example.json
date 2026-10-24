@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "state": "kitchen-sink",
+  "generatedAt": "2026-07-22T00:00:00Z",
+  "routes": [
+    {
+      "id": "product-detail-demo",
+      "title": "Target detail — populated",
+      "path": "/targets/products/1",
+      "kind": "detail",
+      "tags": ["targets", "detail"]
+    },
+    {
+      "id": "target-360-demo",
+      "title": "Target 360 — populated",
+      "path": "/targets/repositories/1",
+      "kind": "detail",
+      "tags": ["targets", "detail"]
+    },
+    {
+      "id": "execution-list-demo",
+      "title": "Target executions — populated",
+      "path": "/repos/1/jobs",
+      "kind": "detail",
+      "tags": ["executions", "detail"]
+    },
+    {
+      "id": "coverage-product-demo",
+      "title": "Coverage product — mixed states",
+      "path": "/coverage/products/1",
+      "kind": "detail",
+      "tags": ["coverage", "detail"]
+    },
+    {
+      "id": "coverage-run-demo",
+      "title": "Coverage run — completed",
+      "path": "/coverage/runs/1",
+      "kind": "detail",
+      "tags": ["coverage", "detail"]
+    },
+    {
+      "id": "config-run-demo",
+      "title": "Config Guard run — findings",
+      "path": "/config-scan/runs/1",
+      "kind": "detail",
+      "tags": ["config-guard", "detail"]
+    },
+    {
+      "id": "iac-run-demo",
+      "title": "IaC run — completed",
+      "path": "/iac/runs/1",
+      "kind": "detail",
+      "tags": ["iac", "detail"]
+    },
+    {
+      "id": "iac-repository-demo",
+      "title": "IaC repository — findings",
+      "path": "/iac/repositories/1",
+      "kind": "detail",
+      "tags": ["iac", "detail"]
+    },
+    {
+      "id": "ptai-scan-demo",
+      "title": "PT AI scan — completed",
+      "path": "/ptai-scans/1",
+      "kind": "detail",
+      "tags": ["ptai", "detail"]
+    }
+  ]
+}

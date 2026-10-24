@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'iac_macros.html' as iac_ui %}
+
+{% block title %}IaC · {{ repository_target.project_path }} - DevSecOps Platform{% endblock %}
+
+{% macro sev_badge(sev) %}
+    {%- set s = (sev or 'info')|lower -%}
+    {%- if s == 'critical' -%}<span class="badge badge-danger">CRIT</span>
+    {%- elif s == 'high' -%}<span class="badge badge-danger">HIGH</span>
+    {%- elif s == 'medium' -%}<span class="badge badge-warning">MED</span>
+    {%- elif s == 'low' -%}<span class="badge">LOW</span>
+    {%- else -%}<span class="badge badge-muted">INFO</span>{%- endif -%}
+{% endmacro %}
+
+{% macro kv(label, value, mono=False) %}
+<div class="detail-kv">
+    <span class="detail-kv-label">{{ label }}</span>
+    {% if value is not none and value != '' %}<span class="detail-kv-value{% if mono %} mono{% endif %}">{{ value }}</span>{% else %}<span class="no-data">—</span>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro stage(label, description, status, icon_name) %}
+    {% set normalized = (status or 'unknown')|lower %}
+    <div class="iac-flow-stage iac-flow-stage--{{ normalized }}">
+        <span class="iac-flow-icon">{{ icons.icon(icon_name) }}</span>
+        <div class="iac-flow-copy">
+            <span class="iac-flow-label">{{ label }}</span>
+            <span class="iac-flow-description">{{ description }}</span>
+        </div>
+        {{ iac_ui.status_badge(status) }}
+    </div>
+{% endmacro %}
+
+{% block content %}
+<div class="products-page iac-target-page">
+    <div class="page-header iac-target-header">
+        <a href="/iac/repositories" class="back-link">{{ icons.icon('arrow-left', 'icon-sm') }} All IaC repositories</a>
+        <div class="iac-target-heading-row">
+            <div>
+                <span class="dashboard-section-kicker">IaC repository</span>
+                <h1>{{ repository_target.project_path }}</h1>
+                <p>{{ history|length }} scan{% if history|length != 1 %}s{% endif %} in history · selected run <a href="/iac/runs/{{ run.id }}">#{{ run.id }}</a></p>
+            </div>
+            <div id="actions" class="page-actions iac-target-actions">
+                <form method="post" action="/iac/repositories/{{ repo.id }}/rescan">
+                    <button type="submit" class="btn btn-primary">{{ icons.icon('rotate', 'icon-sm') }} Rescan</button>
+                </form>
+                {% if repo.sarif_path %}
+                <form method="post" action="/iac/repositories/{{ repo.id }}/reupload-asoc">
+                    <input type="hidden" name="request_key" value="{{ reupload_request_key }}">
+                    <button type="submit" class="btn btn-secondary" title="Upload this scan's existing SARIF without rescanning">{{ icons.icon('arrow-up-right', 'icon-sm') }} Re-upload</button>
+                </form>
+                <a href="/iac/repositories/{{ repo.id }}/sarif" class="btn btn-secondary">{{ icons.icon('download', 'icon-sm') }} SARIF</a>
+                {% endif %}
+                {% if repository_target.project_url %}
+                <a href="{{ repository_target.project_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">{{ icons.icon('arrow-up-right', 'icon-sm') }} GitLab</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="iac-scan-workspace">
+        <aside id="history" class="page-section iac-scan-history" aria-label="Repository scan history">
+            <div class="iac-panel-heading">
+                <div>
+                    <span class="dashboard-section-kicker">Timeline</span>
+                    <h2>Scan history</h2>
+                </div>
+                <span class="iac-history-count">{{ history|length }}</span>
+            </div>
+            <nav class="iac-history-list">
+                {% for item in history %}
+                    {% set item_run = item.run %}
+                    {% set selected = item.id == repo.id %}
+                    {% set item_status = item.scan_status or (item_run.status if item_run else 'unknown') %}
+                    <a class="iac-history-item{% if selected %} active{% endif %}" href="/iac/repositories/{{ repository_target.id }}?scan_id={{ item.id }}" {% if selected %}aria-current="page"{% endif %}>
+                        <span class="iac-history-rail" aria-hidden="true"><span class="iac-history-dot iac-history-dot--{{ item_status|lower }}"></span></span>
+                        <span class="iac-history-body">
+                            <span class="iac-history-topline">
+                                <strong>Run #{{ item.run_id }}</strong>
+                                {% if item_run and item_run.is_rescan %}<span class="badge badge-warning">rescan</span>{% endif %}
+                            </span>
+                            <span class="iac-history-time">{{ (item_run.started_at or item_run.created_at)|localtime('%Y-%m-%d %H:%M:%S') if item_run else item.created_at|localtime('%Y-%m-%d %H:%M:%S') }}</span>
+                            <span class="iac-history-statuses">
+                                {{ iac_ui.status_badge(item.scan_status) }}
+                                {{ iac_ui.status_badge(item.asoc_upload_status) }}
+                            </span>
+                            <span class="iac-history-findings">
+                                <b>{{ item.findings_count or 0 }}</b> findings
+                                {% if item.critical_count or item.high_count %}<em>{{ item.critical_count or 0 }} critical · {{ item.high_count or 0 }} high</em>{% endif %}
+                            </span>
+                        </span>
+                    </a>
+                {% endfor %}
+            </nav>
+        </aside>
+
+        <section class="iac-scan-inspector" aria-label="Scan inspection">
+            <section id="status" class="page-section iac-selected-scan">
+                <div class="iac-panel-heading iac-selected-heading">
+                    <div>
+                        <span class="dashboard-section-kicker">Selected execution</span>
+                        <h2>Run #{{ run.id }}</h2>
+                        <p>{{ run.trigger|replace('_', ' ')|title }} · {{ (run.started_at or run.created_at)|localtime('%Y-%m-%d %H:%M:%S') }}</p>
+                    </div>
+                    {{ iac_ui.status_badge(run.status) }}
+                </div>
+
+                <div class="iac-execution-flow" aria-label="IaC execution stages">
+                    {{ stage('Discover', 'Repository tree and IaC markers', repo.finder_status, 'search') }}
+                    <span class="iac-flow-connector" aria-hidden="true">{{ icons.icon('arrow-right') }}</span>
+                    {{ stage('Checkov', 'Policy scan and SARIF artifact', repo.scan_status, 'shield') }}
+                    <span class="iac-flow-connector" aria-hidden="true">{{ icons.icon('arrow-right') }}</span>
+                    {{ stage('ASOC', 'Results delivery', repo.asoc_upload_status, 'arrow-up-right') }}
+                </div>
+
+                <div class="iac-scan-metrics">
+                    <div class="iac-scan-metric iac-scan-metric--critical"><span>Critical</span><strong>{{ repo.critical_count or 0 }}</strong></div>
+                    <div class="iac-scan-metric iac-scan-metric--high"><span>High</span><strong>{{ repo.high_count or 0 }}</strong></div>
+                    <div class="iac-scan-metric iac-scan-metric--medium"><span>Medium</span><strong>{{ repo.medium_count or 0 }}</strong></div>
+                    <div class="iac-scan-metric"><span>Low</span><strong>{{ repo.low_count or 0 }}</strong></div>
+                    <div class="iac-scan-metric"><span>Info</span><strong>{{ repo.info_count or 0 }}</strong></div>
+                    <div class="iac-scan-metric iac-scan-metric--total"><span>Total</span><strong>{{ repo.findings_count or 0 }}</strong></div>
+                </div>
+            </section>
+
+            {% if repo.error_text or run.error_text %}
+            <section class="page-section cscan-error-box iac-selected-error">
+                <strong>{{ icons.icon('warning', 'icon-sm') }} Execution error</strong>
+                <pre class="iac-error-log">{{ repo.error_text or run.error_text }}</pre>
+            </section>
+            {% endif %}
+
+            <details id="metadata" class="page-section iac-scan-metadata">
+                <summary>Execution metadata</summary>
+                <div class="detail-kv-grid">
+                    {{ kv('Default branch', repo.default_branch, mono=True) }}
+                    {{ kv('IaC markers', repo.iac_markers, mono=True) }}
+                    {{ kv('Trigger', run.trigger) }}
+                    {{ kv('Scanner', run.scanner_name, mono=True) }}
+                    {{ kv('GitLab project id', repo.gitlab_project_id, mono=True) }}
+                    {{ kv('ASOC repository', repo.asoc_repository_slug, mono=True) }}
+                    {{ kv('ASOC repository id', repo.asoc_repository_id, mono=True) }}
+                    {{ kv('SARIF artifact', repo.sarif_path, mono=True) }}
+                    {{ kv('Started', run.started_at|localtime('%Y-%m-%d %H:%M:%S') if run.started_at else None) }}
+                    {{ kv('Finished', run.finished_at|localtime('%Y-%m-%d %H:%M:%S') if run.finished_at else None) }}
+                </div>
+            </details>
+
+            <section id="findings" class="page-section iac-findings-section" data-iac-findings>
+                <div class="iac-panel-heading iac-findings-heading">
+                    <div>
+                        <span class="dashboard-section-kicker">Scan results</span>
+                        <h2>Findings</h2>
+                        {% if findings %}
+                        <p><span data-findings-visible>{{ findings|length }}</span> of {{ findings|length }} shown</p>
+                        {% elif repo.findings_count %}
+                        <p>{{ repo.findings_count }} reported · details unavailable</p>
+                        {% else %}
+                        <p>0 findings reported</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if findings %}
+                <div class="filter-bar signal-filter-surface iac-findings-toolbar" role="search" aria-label="Filter findings in this scan">
+                    <div class="filter-field iac-findings-search">
+                        <label for="iac-finding-search">Search results</label>
+                        <div class="filter-input-wrap">
+                            <input id="iac-finding-search" type="search" placeholder="Rule, title or file" autocomplete="off" data-finding-search>
+                        </div>
+                    </div>
+                    <div class="filter-field select-field">
+                        <label for="iac-finding-severity">Severity</label>
+                        <div class="select">
+                            <select id="iac-finding-severity" data-severity-filter>
+                                <option value="all">All ({{ findings|length }})</option>
+                                <option value="critical">Critical ({{ repo.critical_count or 0 }})</option>
+                                <option value="high">High ({{ repo.high_count or 0 }})</option>
+                                <option value="medium">Medium ({{ repo.medium_count or 0 }})</option>
+                                <option value="other">Other ({{ (repo.low_count or 0) + (repo.info_count or 0) }})</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="iac-findings-list">
+                    {% for f in findings %}
+                    <article class="iac-finding-result iac-finding-result--{{ (f.severity or 'info')|lower }}" data-finding data-severity="{{ (f.severity or 'info')|lower }}" data-search="{{ ((f.rule_id or '') ~ ' ' ~ (f.title or '') ~ ' ' ~ (f.file_path or '') ~ ' ' ~ (f.description or ''))|lower|e }}">
+                        <div class="iac-finding-result-head">
+                            <div class="iac-finding-identity">
+                                {{ sev_badge(f.severity) }}
+                                <code>{{ f.rule_id }}</code>
+                            </div>
+                            {% if f.file_path %}<span class="iac-finding-location">{{ icons.icon('folder', 'icon-sm') }} <code>{{ f.file_path }}{% if f.line %}:{{ f.line }}{% endif %}</code></span>{% endif %}
+                        </div>
+                        <h3>{{ f.title }}</h3>
+                        {% if f.description %}<p>{{ f.description }}</p>{% endif %}
+                        {% if f.recommendation or f.evidence %}
+                        <details class="iac-finding-details">
+                            <summary>Remediation and evidence</summary>
+                            {% if f.recommendation %}<div class="iac-finding-guidance"><strong>Recommended fix</strong><p>{{ f.recommendation }}</p></div>{% endif %}
+                            {% if f.evidence %}<pre class="iac-error-log">{{ f.evidence }}</pre>{% endif %}
+                        </details>
+                        {% endif %}
+                    </article>
+                    {% endfor %}
+                </div>
+                <div class="iac-findings-empty-filter" data-findings-empty hidden>No findings match the selected filters.</div>
+                {% else %}
+                <div class="empty-state iac-findings-empty">
+                    <div class="empty-icon">{% if repo.scan_status == 'failed' or repo.findings_count %}{{ icons.icon('warning', 'icon-lg') }}{% else %}{{ icons.icon('check-circle', 'icon-lg') }}{% endif %}</div>
+                    <h3>{% if repo.scan_status == 'no_iac' %}No IaC detected{% elif repo.scan_status == 'failed' %}Scan did not produce results{% elif repo.scan_status in ['queued', 'running'] %}Scan is still running{% elif repo.findings_count %}Finding details unavailable{% else %}No findings{% endif %}</h3>
+                    <p>{% if repo.scan_status == 'failed' %}Open the execution error above for diagnostics.{% elif repo.scan_status in ['queued', 'running'] %}This page refreshes when the execution state changes.{% elif repo.findings_count %}The scanner reported {{ repo.findings_count }} findings, but their detailed records are not available for this execution.{% else %}This scan is clean for the enabled Checkov policies.{% endif %}</p>
+                </div>
+                {% endif %}
+            </section>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var root = document.querySelector('[data-iac-findings]');
+    if (root) {
+        var search = root.querySelector('[data-finding-search]');
+        var severityControl = root.querySelector('[data-severity-filter]');
+        var findings = Array.prototype.slice.call(root.querySelectorAll('[data-finding]'));
+        var visible = root.querySelector('[data-findings-visible]');
+        var empty = root.querySelector('[data-findings-empty]');
+        var parameters = new URLSearchParams(window.location.search);
+        var requestedSeverity = parameters.get('finding_severity') || 'all';
+        var severity = ['all', 'critical', 'high', 'medium', 'other'].includes(requestedSeverity) ? requestedSeverity : 'all';
+
+        if (search) search.value = parameters.get('finding_q') || '';
+        if (severityControl) severityControl.value = severity;
+
+        function syncFilters(push) {
+            var url = new URL(window.location.href);
+            var query = search ? search.value.trim() : '';
+            if (query) url.searchParams.set('finding_q', query);
+            else url.searchParams.delete('finding_q');
+            if (severity !== 'all') url.searchParams.set('finding_severity', severity);
+            else url.searchParams.delete('finding_severity');
+            window.history[push ? 'pushState' : 'replaceState']({}, '', url.pathname + url.search + url.hash);
+        }
+
+        function applyFilters(sync, push) {
+            var query = search ? search.value.trim().toLowerCase() : '';
+            var count = 0;
+            findings.forEach(function (finding) {
+                var findingSeverity = finding.dataset.severity || 'info';
+                var severityMatches = severity === 'all' || findingSeverity === severity || (severity === 'other' && ['low', 'info'].includes(findingSeverity));
+                var textMatches = !query || (finding.dataset.search || '').includes(query);
+                var show = severityMatches && textMatches;
+                finding.hidden = !show;
+                if (show) count += 1;
+            });
+            if (visible) visible.textContent = String(count);
+            if (empty) empty.hidden = count !== 0;
+            if (sync) syncFilters(push);
+        }
+
+        if (severityControl) severityControl.addEventListener('change', function () {
+            severity = severityControl.value;
+            applyFilters(true, true);
+        });
+        if (search) search.addEventListener('input', function () { applyFilters(true, false); });
+        window.addEventListener('popstate', function () {
+            var state = new URLSearchParams(window.location.search);
+            severity = state.get('finding_severity') || 'all';
+            if (!['all', 'critical', 'high', 'medium', 'other'].includes(severity)) severity = 'all';
+            if (search) search.value = state.get('finding_q') || '';
+            if (severityControl) {
+                severityControl.value = severity;
+                severityControl.dispatchEvent(new Event('signal-select-sync'));
+            }
+            applyFilters(false, false);
+        });
+        applyFilters(false, false);
+    }
+}());
+</script>
+{% if run.status in ['queued', 'running'] or repo.scan_status in ['queued', 'running'] %}
+<script>
+(function pollSelectedIacRun() {
+    fetch('/iac/scan-status?run_id={{ run.id }}', {cache: 'no-store'})
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+            if (!payload.run || !['queued', 'running'].includes(payload.run.status)) {
+                window.location.reload();
+                return;
+            }
+            window.setTimeout(pollSelectedIacRun, 5000);
+        })
+        .catch(function () { window.setTimeout(pollSelectedIacRun, 5000); });
+}());
+</script>
+{% endif %}
+{% endblock %}

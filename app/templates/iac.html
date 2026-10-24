@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'iac_macros.html' as iac_ui %}
+
+{% block title %}IaC - DevSecOps Platform{% endblock %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>IaC</h1>
+            <p>Infrastructure-as-Code coverage, Checkov findings, and ASOC upload status.</p>
+        </div>
+        {{ iac_ui.iac_tabs(active_tab) }}
+    </div>
+
+    <section id="scan" class="page-section scan-target-panel">
+        <form method="post" action="/iac/scan-target" class="scan-target-form">
+            <label for="iac-scan-target" class="scan-target-label">{{ icons.icon('search', 'icon-sm') }} GitLab target</label>
+            <input type="url" name="target_url" required
+                   id="iac-scan-target"
+                   placeholder="https://gitlab.company.com/group/subgroup"
+                   class="scan-target-input">
+            <button type="submit" class="btn btn-primary">{{ icons.icon('rotate', 'icon-sm') }} Start scan</button>
+        </form>
+    </section>
+
+    {% if scan_error %}
+    <div class="cscan-error-box" style="margin-bottom: 1.25rem;">
+        <strong>Scan was not started.</strong>
+        Enter the full URL of a group or repository on a configured GitLab host
+        (for example <code>https://gitlab.enterprise.example.com/group/subgroup</code>).
+        ScanOps has no access token for unknown hosts.
+    </div>
+    {% endif %}
+
+    {% if active_run %}
+    <div class="cscan-status-bar" style="margin-bottom: 1.25rem; border-color: rgba(56, 189, 248, 0.4);">
+        {{ iac_ui.status_badge(active_run.status) }}
+        <span id="iac-dashboard-progress" style="color: var(--text-secondary);">Run <strong style="color: var(--text-primary);">#{{ active_run.id }}</strong> &mdash; {{ active_run.scanned_repositories }}/{{ active_run.total_repositories }} scanned, {{ active_run.candidate_repositories }} IaC repos</span>
+        <a href="/iac/runs/{{ active_run.id }}" class="btn btn-ghost btn-sm">Open {{ icons.icon('arrow-right', 'icon-sm') }}</a>
+    </div>
+    {% endif %}
+
+    <section id="metrics" class="page-section stats-grid audit-metrics-grid" style="margin-bottom: 1rem; grid-template-columns: repeat(5, minmax(0, 1fr));">
+        <div class="stat-card audit-stat-card">
+            <div class="stat-content"><strong class="stat-value">{{ dashboard.repositories_total }}</strong><p class="audit-stat-label">Known repos</p></div>
+        </div>
+        <div class="stat-card audit-stat-card">
+            <div class="stat-content"><strong class="stat-value">{{ dashboard.iac_repositories }}</strong><p class="audit-stat-label">IaC repos</p></div>
+        </div>
+        <div class="stat-card audit-stat-card">
+            <div class="stat-content"><strong class="stat-value">{{ dashboard.scanned_repositories }}</strong><p class="audit-stat-label">Scanned</p></div>
+        </div>
+        <div class="stat-card error audit-stat-card">
+            <div class="stat-content"><strong class="stat-value">{{ dashboard.critical }}</strong><p class="audit-stat-label">Critical</p></div>
+        </div>
+        <div class="stat-card error audit-stat-card">
+            <div class="stat-content"><strong class="stat-value">{{ dashboard.high }}</strong><p class="audit-stat-label">High</p></div>
+        </div>
+    </section>
+
+    <section id="problems" class="page-section table-container" tabindex="0" aria-label="IaC problem repositories" style="margin-bottom: 1rem;">
+        <div class="chart-header">
+            <div class="chart-title">
+                <h2>Top Critical / High Problems</h2>
+                <p class="chart-subtitle">Grouped by severity, rule id, and title from latest successful scan per repository.</p>
+            </div>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Problem</th>
+                    <th>Severity</th>
+                    <th>Repos</th>
+                    <th>Findings</th>
+                    <th>Products</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for problem in dashboard.top_problems %}
+                <tr>
+                    <td>
+                        <div class="product-info">
+                            <strong>{{ problem.rule_id }}</strong>
+                            <small>{{ problem.title }}</small>
+                        </div>
+                    </td>
+                    <td><span class="pill failed">{{ problem.severity|upper }}</span></td>
+                    <td><span class="badge">{{ problem.repositories_count }}</span></td>
+                    <td><span class="badge badge-danger">{{ problem.findings }}</span></td>
+                    <td><span class="badge">{{ problem.products_count }}</span></td>
+                    <td>
+                        <a class="btn btn-ghost btn-sm" href="/iac/findings?severity={{ problem.severity|urlencode }}&rule_id={{ problem.rule_id|urlencode }}&title={{ problem.title|urlencode }}">Open {{ icons.icon('arrow-right', 'icon-sm') }}</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not dashboard.top_problems %}
+                <tr><td colspan="6"><span class="no-data">No Critical or High IaC findings yet.</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </section>
+
+    <section id="repositories" class="page-section table-container" tabindex="0" aria-label="IaC repositories">
+        <div class="chart-header">
+            <div class="chart-title">
+                <h2>Latest Repositories</h2>
+                <p class="chart-subtitle">{{ latest_total }} repositories in latest IaC state.</p>
+            </div>
+            <a href="/iac/repositories" class="btn btn-outline btn-sm">All repositories {{ icons.icon('arrow-right', 'icon-sm') }}</a>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Repository</th>
+                    <th>IaC</th>
+                    <th>Scan</th>
+                    <th>Severity</th>
+                    <th>ASOC</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for repo in latest_repos %}
+                <tr>
+                    <td>
+                        <a href="/iac/repositories/{{ repo.id }}" title="Open scan details">{{ repo.project_path }}</a>
+                        {% if repo.project_url %}<a href="{{ repo.project_url }}" target="_blank" rel="noopener noreferrer" title="Open in GitLab">{{ icons.icon('arrow-up-right', 'icon-sm') }}</a>{% endif %}
+                    </td>
+                    <td>{% if repo.has_iac %}<span class="pill success">Yes</span>{% else %}<span class="no-data">No</span>{% endif %}</td>
+                    <td>{{ iac_ui.status_badge(repo.scan_status) }}</td>
+                    <td>{{ iac_ui.severity_pills(repo.critical_count, repo.high_count) }}</td>
+                    <td>{{ iac_ui.status_badge(repo.asoc_upload_status) }}</td>
+                </tr>
+                {% endfor %}
+                {% if not latest_repos %}
+                <tr><td colspan="5"><span class="no-data">Run an IaC scan to build repository coverage.</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if active_run and active_run.status in ['queued', 'running'] %}
+<script>
+(function pollIacDashboard() {
+    fetch('/iac/scan-status?run_id={{ active_run.id }}', {cache: 'no-store'})
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+            if (payload.run && !['queued', 'running'].includes(payload.run.status)) {
+                window.location.reload();
+                return;
+            }
+            if (payload.run) {
+                var progress = document.getElementById('iac-dashboard-progress');
+                if (progress) progress.innerHTML = 'Run <strong style="color: var(--text-primary);">#' + payload.run.id + '</strong> &mdash; ' + payload.run.scanned_repositories + '/' + payload.run.total_repositories + ' scanned, ' + payload.run.candidate_repositories + ' IaC repos';
+            }
+            setTimeout(pollIacDashboard, 5000);
+        })
+        .catch(function () { setTimeout(pollIacDashboard, 5000); });
+}());
+</script>
+{% endif %}
+{% endblock %}

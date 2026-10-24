@@ -1,0 +1,92 @@
+name: scanops-demo
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: scanops_demo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DEMO_POSTGRES_PASSWORD:-scanops-demo-local}
+    volumes:
+      - demo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d scanops_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - demo-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    image: scanops-demo:local
+    environment: &demo-env
+      SCANOPS_AGENT_API_TOKEN: ${DEMO_AGENT_API_TOKEN:-}
+      TZ: Europe/Moscow
+      DATABASE_URL: postgresql://postgres:${DEMO_POSTGRES_PASSWORD:-scanops-demo-local}@postgres:5432/scanops_demo
+      PIPE_BEARER_TOKEN: ${DEMO_PIPE_BEARER_TOKEN:-scanops-demo-pipe-token}
+      INTEGRATION_CREDENTIALS_KEY: ${DEMO_INTEGRATION_CREDENTIALS_KEY:-scanops-demo-credentials}
+      UI_AUTH_USERNAME: ${DEMO_UI_USERNAME:-demo}
+      UI_AUTH_PASSWORD: ${DEMO_UI_PASSWORD:-demo}
+      # Reserved non-resolving demo host keeps seeded ASOC GitLab references
+      # visible under the same exact-host allowlist used in production.
+      GITLAB_API_URL: "https://gitlab.demo.invalid"
+      PRODUCT_NESTED_NAMESPACES: sandbox
+      GITLAB_PAT: ""
+      GITLAB: ""
+      GITLAB_INSTANCES: "[]"
+      CONFIG_SCAN_ENABLED: "false"
+      CONFIG_SCAN_RUN_BACKGROUND_SCHEDULER: "false"
+      CONFIG_SCAN_FULL_PRODUCT_ON_START: "false"
+      IAC_WORKER_ENABLED: "false"
+      # The disposable stand has no background worker containers, so pipeline
+      # freshness and worker heartbeat checks are intentionally disabled.
+      HEALTH_EXPECTED_WORKERS: "none"
+      HEXWAY_URL: ""
+      HEXWAY_TOKEN: ""
+      PTAI_URL: ""
+      PTAI_TOKEN: ""
+      SECPIPE_PUBLIC_URL: http://127.0.0.1:${DEMO_APP_PORT:-18081}
+      IAC_REPORTS_DIR: /data/iac_reports
+      CONFIG_SCAN_REPORTS_DIR: /data/config_scan_reports
+    ports:
+      - "127.0.0.1:${DEMO_APP_PORT:-18081}:8000"
+    volumes:
+      - demo_iac_reports:/data/iac_reports
+      - demo_config_scan_reports:/data/config_scan_reports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - demo-network
+
+  seed:
+    image: scanops-demo:local
+    command: ["python", "scripts/seed_demo_data.py", "--profile", "volume", "--reset", "--anchor", "now"]
+    working_dir: /app
+    environment:
+      <<: *demo-env
+      PYTHONPATH: /app
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - demo-network
+    restart: "no"
+
+volumes:
+  demo_postgres_data:
+  demo_iac_reports:
+  demo_config_scan_reports:
+
+networks:
+  demo-network:
+    driver: bridge

@@ -1,0 +1,280 @@
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/brand.html' as brand %}
+<!DOCTYPE html>
+<html lang="en" data-theme="signal-river">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0e0a13">
+    <title>{% block title %}ScanOps{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/scanops-mark.svg?v=20260814-scanops-mark-2">
+    <link rel="apple-touch-icon" href="/static/scanops-mark.svg?v=20260814-scanops-mark-2">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20260727-signal-control-palette-1">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260730-local-toc-removal-1">
+    <link rel="stylesheet" href="/static/css/signal-river.css?v=20260923-asoc-product-lifecycle-1">
+    <link rel="stylesheet" href="/static/css/signal-control.css?v=20260923-asoc-product-lifecycle-1">
+</head>
+<body class="layout signal-river-layout">
+    <script>
+        try {
+            if (window.localStorage.getItem('secpipe.sidebar.collapsed') === 'true') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+        } catch (error) {}
+    </script>
+    {% set current_path = request.url.path %}
+    {% set current_query = request.query_params if request.query_params is defined else {} %}
+    {% set job_journal_active = current_path.startswith('/failed') or current_path.startswith('/logs') or (current_path.startswith('/repos/') and current_path.endswith('/jobs')) %}
+    {% set failed_jobs_active = current_path.startswith('/failed') or (current_path.startswith('/logs') and current_query.get('status') == 'failed') %}
+    {% set pipelines_active = current_path.startswith('/pipelines') %}
+    {% set config_guard_active = current_path.startswith('/config-scan') %}
+    {% set iac_active = current_path.startswith('/iac') %}
+    {% set ptai_active = current_path.startswith('/ptai-scans') %}
+    {% set execution_family_active = (job_journal_active and not failed_jobs_active) or pipelines_active or config_guard_active or iac_active or ptai_active or current_path.startswith('/executions') %}
+    {% set targets_operator_active = current_path.startswith('/targets/operator') %}
+    {% set products_active = current_path.startswith('/targets/products') or current_path.startswith('/products') or (targets_operator_active and current_query.get('level', 'product') != 'repository') %}
+    {% set repositories_active = current_path.startswith('/targets/repositories') or current_path.startswith('/repositories') or (targets_operator_active and current_query.get('level') == 'repository') %}
+    {% set current_section = 'Operations' %}
+    {% set current_page = 'Overview' %}
+    {% if job_journal_active %}
+        {% set current_page = 'Executions' %}
+    {% elif current_path.startswith('/targets') %}
+        {% set current_section = 'Security posture' %}
+        {% if repositories_active %}
+            {% set current_page = 'Repositories' %}
+        {% else %}
+            {% set current_page = 'Products' %}
+        {% endif %}
+    {% elif pipelines_active %}
+        {% set current_section = 'Operations' %}
+        {% set current_page = 'Active pipelines' %}
+    {% elif current_path.startswith('/coverage') %}
+        {% set current_section = 'Security posture' %}
+        {% set current_page = 'Coverage' %}
+    {% elif current_path.startswith('/scanners') %}
+        {% set current_section = 'Infrastructure' %}
+        {% set current_page = 'Scanner fleet' %}
+    {% elif config_guard_active %}
+        {% set current_section = 'Operations' %}
+        {% set current_page = 'Config Guard' %}
+    {% elif iac_active %}
+        {% set current_section = 'Operations' %}
+        {% set current_page = 'IaC scanning' %}
+    {% elif ptai_active %}
+        {% set current_section = 'Operations' %}
+        {% set current_page = 'PT AI' %}
+    {% elif current_path.startswith('/integrations') %}
+        {% set current_section = 'Infrastructure' %}
+        {% set current_page = 'Integrations' %}
+    {% endif %}
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+            <a href="/" class="brand" title="ScanOps control plane">
+                {{ brand.mark() }}
+                <span class="brand-text">
+                    <span class="brand-main">ScanOps</span>
+                    <span class="brand-accent">signal control</span>
+                </span>
+            </a>
+            <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Collapse navigation" aria-expanded="true" title="Collapse navigation">
+                <span class="sidebar-toggle-collapse">{{ icons.icon('arrow-left', 'icon-sm') }}</span>
+                <span class="sidebar-toggle-expand">{{ icons.icon('arrow-right', 'icon-sm') }}</span>
+            </button>
+        </div>
+
+        <nav class="side-nav" aria-label="Main navigation">
+            <div class="side-group side-group-operate">
+                <span class="side-group-title">Operate</span>
+                <a{% if current_path == '/' or current_path.startswith('/overview') or current_path.startswith('/dashboard') %} aria-current="page"{% endif %} href="/" class="side-link{% if current_path == '/' or current_path.startswith('/overview') or current_path.startswith('/dashboard') %} active{% endif %}">
+                    <span>Overview</span>
+                </a>
+                <div class="side-family{% if execution_family_active %} active-family{% endif %}">
+                    <a{% if current_path.startswith('/executions') %} aria-current="page"{% endif %} href="/executions" class="side-link side-link-parent{% if current_path.startswith('/executions') %} active{% endif %}">
+                        <span>Executions</span>
+                    </a>
+                    <div class="side-subnav" aria-label="Execution views">
+                        <a{% if job_journal_active and not failed_jobs_active %} aria-current="page"{% endif %} href="/logs" class="side-sublink{% if job_journal_active and not failed_jobs_active %} active{% endif %}">Job journal</a>
+                        <a{% if pipelines_active %} aria-current="page"{% endif %} href="/pipelines" class="side-sublink{% if pipelines_active %} active{% endif %}">Active pipelines</a>
+                        <a{% if config_guard_active %} aria-current="page"{% endif %} href="/config-scan" class="side-sublink{% if config_guard_active %} active{% endif %}">Config Guard</a>
+                        <a{% if iac_active %} aria-current="page"{% endif %} href="/iac" class="side-sublink{% if iac_active %} active{% endif %}">IaC scanning</a>
+                        <a{% if ptai_active %} aria-current="page"{% endif %} href="/ptai-scans" class="side-sublink{% if ptai_active %} active{% endif %}">PT AI</a>
+                    </div>
+                </div>
+                <a{% if failed_jobs_active %} aria-current="page"{% endif %} href="/logs?status=failed" class="side-link side-link-danger{% if failed_jobs_active %} active{% endif %}">
+                    <span>Failed jobs</span>
+                </a>
+            </div>
+
+            <div class="side-group side-group-understand">
+                <span class="side-group-title">Understand</span>
+                <a{% if current_path.startswith('/coverage') %} aria-current="page"{% endif %} href="/coverage" class="side-link{% if current_path.startswith('/coverage') %} active{% endif %}">
+                    <span>Coverage</span>
+                </a>
+                <a{% if products_active %} aria-current="page"{% endif %} href="/targets?level=product" class="side-link{% if products_active %} active{% endif %}">
+                    <span>Products</span>
+                </a>
+                <a{% if repositories_active %} aria-current="page"{% endif %} href="/targets?level=repository" class="side-link{% if repositories_active %} active{% endif %}">
+                    <span>Repositories</span>
+                </a>
+            </div>
+
+            <div class="side-group side-group-platform">
+                <span class="side-group-title">Platform</span>
+                <a{% if current_path.startswith('/scanners') %} aria-current="page"{% endif %} href="/scanners" class="side-link{% if current_path.startswith('/scanners') %} active{% endif %}">
+                    <span>Scanner fleet</span>
+                </a>
+                <a{% if current_path.startswith('/integrations') %} aria-current="page"{% endif %} href="/integrations" class="side-link{% if current_path.startswith('/integrations') %} active{% endif %}">
+                    <span>Integrations</span>
+                </a>
+            </div>
+        </nav>
+
+        <section class="side-runtime" id="side-health" aria-label="ScanOps runtime status">
+            <div class="side-runtime-status">
+                <span class="side-health-dot" aria-hidden="true"></span>
+                <span class="side-health-label">Checking workers…</span>
+            </div>
+            <dl class="side-runtime-facts">
+                <div><dt>Uptime</dt><dd id="side-uptime">—</dd></div>
+                <div><dt>Last poll</dt><dd id="side-last-poll">—</dd></div>
+            </dl>
+        </section>
+    </aside>
+
+    <div class="layout-body">
+        <header class="ops-header">
+            <nav class="ops-breadcrumb" aria-label="Current location">
+                <a href="/">ScanOps</a>
+                {% if breadcrumbs %}
+                    {% for item in breadcrumbs %}
+                    <span aria-hidden="true">/</span>
+                    {% if item.href %}
+                    <a href="{{ item.href }}">{{ item.label }}</a>
+                    {% elif item.current %}
+                    <strong>{{ item.label }}</strong>
+                    {% else %}
+                    <span>{{ item.label }}</span>
+                    {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <span aria-hidden="true">/</span>
+                    <span>{{ current_section }}</span>
+                    <span aria-hidden="true">/</span>
+                    <strong>{{ current_page }}</strong>
+                {% endif %}
+            </nav>
+            <div class="ops-header-actions">
+                <button
+                    type="button"
+                    class="command-palette-trigger"
+                    id="command-palette-trigger"
+                    aria-label="Open quick navigation"
+                    aria-haspopup="dialog"
+                    aria-controls="command-palette"
+                >
+                    <span class="command-palette-symbol" aria-hidden="true">⌘</span>
+                    <span>Quick action</span>
+                    <kbd>K</kbd>
+                </button>
+                <div class="ops-environment" id="ops-environment" aria-label="Current environment: checking">
+                    <span class="ops-environment-dot" aria-hidden="true"></span>
+                    <strong id="ops-environment-label">INTERNAL · CHECKING</strong>
+                </div>
+            </div>
+        </header>
+
+        <dialog class="command-palette" id="command-palette" aria-labelledby="command-palette-title">
+            <div class="command-palette-surface">
+                <header>
+                    {{ icons.icon('search') }}
+                    <label class="visually-hidden" for="command-palette-search" id="command-palette-title">Navigate ScanOps</label>
+                    <input
+                        id="command-palette-search"
+                        type="search"
+                        autocomplete="off"
+                        placeholder="Search screens and operational views"
+                    >
+                    <kbd>Esc</kbd>
+                </header>
+                <nav aria-label="Quick navigation">
+                    <span class="command-palette-section">Operate</span>
+                    <a href="/" data-command-label="Overview operational signal execution health">
+                        {{ icons.icon('chart') }}
+                        <span><strong>Overview</strong><small>System pulse and attention queue</small></span>
+                        <kbd>O</kbd>
+                    </a>
+                    <a href="/logs" data-command-label="Executions jobs activity timeline">
+                        {{ icons.icon('layers') }}
+                        <span><strong>Executions</strong><small>Jobs, pipelines and control runs</small></span>
+                        <kbd>E</kbd>
+                    </a>
+                    <a href="/pipelines" data-command-label="Active pipelines queue orchestration">
+                        {{ icons.icon('diagram') }}
+                        <span><strong>Active pipelines</strong><small>Queue and orchestration state</small></span>
+                    </a>
+                    <a href="/config-scan" data-command-label="Config Guard configuration drift">
+                        {{ icons.icon('shield') }}
+                        <span><strong>Config Guard</strong><small>Configuration drift evidence</small></span>
+                    </a>
+                    <a href="/iac" data-command-label="IaC infrastructure as code Checkov">
+                        {{ icons.icon('cube') }}
+                        <span><strong>IaC scanning</strong><small>Infrastructure control runs</small></span>
+                    </a>
+                    <a href="/ptai-scans" data-command-label="PT AI scans queue">
+                        {{ icons.icon('wrench') }}
+                        <span><strong>PT AI</strong><small>Application analysis operations</small></span>
+                    </a>
+                    <span class="command-palette-section">Understand</span>
+                    <a href="/coverage" data-command-label="Coverage controls gaps freshness">
+                        {{ icons.icon('branch') }}
+                        <span><strong>Coverage</strong><small>Required controls and freshness</small></span>
+                    </a>
+                    <a href="/targets?level=product" data-command-label="Products product targets">
+                        {{ icons.icon('cube') }}
+                        <span><strong>Products</strong><small>Product scope and evidence</small></span>
+                    </a>
+                    <a href="/targets?level=repository" data-command-label="Repositories repository targets">
+                        {{ icons.icon('layers') }}
+                        <span><strong>Repositories</strong><small>Repository controls and execution evidence</small></span>
+                    </a>
+                    <span class="command-palette-section">Platform</span>
+                    <a href="/scanners" data-command-label="Scanner fleet workers capacity">
+                        {{ icons.icon('wrench') }}
+                        <span><strong>Scanner fleet</strong><small>Workers, versions and capacity</small></span>
+                    </a>
+                    <a href="/integrations" data-command-label="Integrations connectors GitLab ASOC">
+                        {{ icons.icon('diagram') }}
+                        <span><strong>Integrations</strong><small>Connection management</small></span>
+                    </a>
+                    <p class="command-palette-empty" hidden>No matching screen</p>
+                </nav>
+                <footer>
+                    <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+                    <span><kbd>Enter</kbd> open</span>
+                </footer>
+            </div>
+        </dialog>
+
+        {% if not ui_auth_enabled %}
+        <div class="auth-warning-banner" role="alert">
+            {{ icons.icon('warning', 'icon-sm') }}
+            <span>UI authentication is disabled. Set <code>UI_AUTH_USERNAME</code> and <code>UI_AUTH_PASSWORD</code>.</span>
+        </div>
+        {% endif %}
+
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="footer">
+            <p>ScanOps · Internal security control plane</p>
+            <span>Operational data, not vulnerability triage</span>
+        </footer>
+    </div>
+
+    <script src="/static/js/main.js?v=20260805-filter-surface-2" defer></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

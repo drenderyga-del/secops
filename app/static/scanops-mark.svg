@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ScanOps">
+  <defs>
+    <radialGradient id="shell" cx="50%" cy="42%" r="68%">
+      <stop offset="0" stop-color="#21183a"/>
+      <stop offset=".7" stop-color="#120e20"/>
+      <stop offset="1" stop-color="#0d0a16"/>
+    </radialGradient>
+    <linearGradient id="blade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c4a2ff"/>
+      <stop offset=".58" stop-color="#9768ef"/>
+      <stop offset="1" stop-color="#7047ba" stop-opacity=".3"/>
+    </linearGradient>
+    <filter id="core-glow" x="-160%" y="-160%" width="420%" height="420%">
+      <feGaussianBlur stdDeviation="1.35" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="16" cy="16" r="14.5" fill="url(#shell)" stroke="#a87af6" stroke-opacity=".55"/>
+  <circle cx="16" cy="16" r="11.2" fill="none" stroke="#a87af6" stroke-dasharray="1 3" stroke-linecap="round" stroke-opacity=".18"/>
+  <g fill="url(#blade)" transform="translate(16 16)">
+    <path d="M-1.35-3.2-2.1-10.2Q0-12 2.1-10.2L1.35-3.2Q0-2.35-1.35-3.2Z"/>
+    <path d="M-1.35-3.2-2.1-10.2Q0-12 2.1-10.2L1.35-3.2Q0-2.35-1.35-3.2Z" transform="rotate(60)"/>
+    <path d="M-1.35-3.2-2.1-10.2Q0-12 2.1-10.2L1.35-3.2Q0-2.35-1.35-3.2Z" transform="rotate(120)"/>
+    <path d="M-1.35-3.2-2.1-10.2Q0-12 2.1-10.2L1.35-3.2Q0-2.35-1.35-3.2Z" transform="rotate(180)"/>
+    <path d="M-1.35-3.2-2.1-10.2Q0-12 2.1-10.2L1.35-3.2Q0-2.35-1.35-3.2Z" transform="rotate(240)"/>
+    <path d="M-1.35-3.2-2.1-10.2Q0-12 2.1-10.2L1.35-3.2Q0-2.35-1.35-3.2Z" transform="rotate(300)"/>
+  </g>
+  <circle cx="16" cy="16" r="4.15" fill="#171126" stroke="#a87af6" stroke-opacity=".5"/>
+  <circle cx="16" cy="16" r="2.45" fill="#b7f34a" filter="url(#core-glow)"/>
+  <circle cx="15.25" cy="15.2" r=".65" fill="#efffcf" fill-opacity=".88"/>
+</svg>

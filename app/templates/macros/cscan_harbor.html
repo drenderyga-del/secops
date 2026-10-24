@@ -1,0 +1,56 @@
+{# Harbor-style: overall status = worst severity among findings + total count + breakdown in tooltip #}
+{% macro cscan_harbor_severity(summary) %}
+{% if summary is not mapping %}
+{% set s = {} %}
+{% else %}
+{% set s = summary %}
+{% endif %}
+{% set c = (s.critical | default(0)) | int %}
+{% set h = (s.high | default(0)) | int %}
+{% set m = (s.medium | default(0)) | int %}
+{% set l = (s.low | default(0)) | int %}
+{% set i = (s.info | default(0)) | int %}
+{% set total = c + h + m + l + i %}
+{% if total > 0 %}
+    {% if c > 0 %}
+        {% set worst = 'critical' %}{% set letter = 'C' %}{% set wlabel = 'Critical' %}
+    {% elif h > 0 %}
+        {% set worst = 'high' %}{% set letter = 'H' %}{% set wlabel = 'High' %}
+    {% elif m > 0 %}
+        {% set worst = 'medium' %}{% set letter = 'M' %}{% set wlabel = 'Medium' %}
+    {% elif l > 0 %}
+        {% set worst = 'low' %}{% set letter = 'L' %}{% set wlabel = 'Low' %}
+    {% else %}
+        {% set worst = 'info' %}{% set letter = 'I' %}{% set wlabel = 'Info' %}
+    {% endif %}
+{% set tip = 'Overall status: ' ~ wlabel ~ ' (highest severity present). Total ' ~ total|string ~ ' finding(s). Breakdown — C:' ~ c|string ~ ' H:' ~ h|string ~ ' M:' ~ m|string ~ ' L:' ~ l|string ~ ' I:' ~ i|string %}
+<div class="cscan-harbor-wrap" title="{{ tip }}">
+    <span class="cscan-harbor-sev-dot cscan-harbor-sev-dot--{{ worst }}" aria-hidden="true">{{ letter }}</span>
+    <div class="cscan-harbor-main">
+        <div class="cscan-harbor-headline">
+            <span class="cscan-harbor-status cscan-harbor-status--{{ worst }}">{{ wlabel|upper }}</span>
+            <span class="cscan-harbor-sep" aria-hidden="true">·</span>
+            <span class="cscan-harbor-count-line"><strong>{{ total }}</strong> {% if total == 1 %}finding{% else %}findings{% endif %}</span>
+        </div>
+        <div class="cscan-harbor-bar" role="presentation">
+            {% if c %}<span class="cscan-harbor-seg cscan-harbor-seg--critical" style="flex-grow: {{ c }};"></span>{% endif %}
+            {% if h %}<span class="cscan-harbor-seg cscan-harbor-seg--high" style="flex-grow: {{ h }};"></span>{% endif %}
+            {% if m %}<span class="cscan-harbor-seg cscan-harbor-seg--medium" style="flex-grow: {{ m }};"></span>{% endif %}
+            {% if l %}<span class="cscan-harbor-seg cscan-harbor-seg--low" style="flex-grow: {{ l }};"></span>{% endif %}
+            {% if i %}<span class="cscan-harbor-seg cscan-harbor-seg--info" style="flex-grow: {{ i }};"></span>{% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="cscan-harbor-wrap cscan-harbor-wrap--clean" title="No configuration findings">
+    <span class="cscan-harbor-sev-dot cscan-harbor-sev-dot--none" aria-hidden="true">✓</span>
+    <div class="cscan-harbor-main">
+        <div class="cscan-harbor-headline">
+            <span class="cscan-harbor-status cscan-harbor-status--clean">CLEAN</span>
+            <span class="cscan-harbor-sep" aria-hidden="true">·</span>
+            <span class="cscan-harbor-count-line cscan-harbor-total--muted">0 findings</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}

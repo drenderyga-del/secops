@@ -1,0 +1,312 @@
+{% import 'macros/icons.html' as icons %}
+{% set return_control_id = ('integration-return-gitlab-instance-' ~ instance_focus) if connector.key == 'gitlab' and instance_focus else ('integration-return-' ~ connector.key) %}
+
+<aside
+    id="integration-{{ connector.key }}-settings"
+    class="integration-settings-panel"
+    aria-labelledby="integration-{{ connector.key }}-settings-title"
+    data-integration-settings-panel
+    data-connector-key="{{ connector.key }}"
+    data-integration-return-control="{{ return_control_id }}"
+    tabindex="-1"
+>
+    <header class="integration-settings-heading">
+        <div>
+            <span class="integration-health{% if not connector.enabled %} is-disabled{% elif connector.test_status == 'healthy' %} is-healthy{% elif connector.test_status == 'failed' %} is-failed{% endif %}">
+                <i aria-hidden="true"></i>
+                {% if not connector.enabled %}
+                Disabled
+                {% elif connector.test_status == 'failed' %}
+                Connection failed
+                {% elif connector.test_status == 'healthy' %}
+                Connected
+                {% elif connector.configured %}
+                Configured · not tested
+                {% else %}
+                Configuration required
+                {% endif %}
+            </span>
+            <h2 id="integration-{{ connector.key }}-settings-title">{{ connector.name }}</h2>
+            <p>{{ connector.detail }}</p>
+        </div>
+        <a
+            href="/integrations#{{ return_control_id }}"
+            class="btn btn-ghost integration-close-button"
+            data-integration-close
+            data-integration-return-control="{{ return_control_id }}"
+            aria-label="Close {{ connector.name }} settings"
+        >{{ icons.icon('x', 'icon-sm') }}<span>Close settings</span></a>
+    </header>
+
+    <div class="integration-settings-body">
+        {% if notice %}
+        <div class="integration-notice {{ notice_tone }}" role="{% if notice_tone == 'error' %}alert{% else %}status{% endif %}">
+            {{ icons.icon('check-circle' if notice_tone == 'success' else 'warning', 'icon-sm') }}
+            <span>{{ notice }}</span>
+        </div>
+        {% endif %}
+
+        {% if connector.error %}
+        <div class="integration-field-error" role="alert">{{ connector.error }}</div>
+        {% endif %}
+
+        {% if connector.key == 'gitlab' %}
+        <div class="gitlab-instance-toolbar">
+            <div>
+                <strong>GitLab connections</strong>
+                <span>Configure, save, and test each instance independently.</span>
+            </div>
+            <button type="button" class="btn btn-outline gitlab-add-instance" {% if not can_manage_integrations %}disabled{% endif %}>
+                {{ icons.icon('plus', 'icon-sm') }} Add GitLab
+            </button>
+        </div>
+
+        <div class="gitlab-instance-list" data-gitlab-instances aria-live="polite">
+            {% for instance in connector.instances %}
+            <form
+                id="integration-gitlab-instance-{{ instance.id }}"
+                method="post"
+                action="/integrations/gitlab/instances/{{ instance.id }}/save"
+                class="gitlab-instance-editor{% if instance_focus|default('') == instance.id %} is-focused{% endif %}"
+                data-gitlab-instance
+                data-instance-id="{{ instance.id }}"
+                data-submit-progress="Saving…"
+            >
+                {% if connector.source == 'environment' %}
+                <input type="hidden" name="adopt_environment" value="true">
+                {% endif %}
+                <header>
+                    <div>
+                        <span class="gitlab-instance-number">GitLab {{ loop.index }}</span>
+                        <strong>{{ instance.name }}</strong>
+                    </div>
+                    <span class="gitlab-instance-state{% if not instance.enabled %} disabled{% elif instance.test_status == 'healthy' %} configured{% elif instance.test_status == 'failed' %} failed{% endif %}">
+                        <i aria-hidden="true"></i>{{ instance.health_label }}
+                    </span>
+                </header>
+
+                <div class="gitlab-instance-fields">
+                    <label class="integration-field">
+                        <span>Display name</span>
+                        <input name="name" type="text" value="{{ instance.name }}" placeholder="Production GitLab" autocomplete="off" required {% if not can_manage_integrations %}disabled{% endif %}>
+                    </label>
+                    <label class="integration-field wide">
+                        <span>API URL</span>
+                        <input name="api_url" type="url" value="{{ instance.api_url }}" placeholder="https://gitlab.example/api/v4" autocomplete="off" required {% if not can_manage_integrations %}disabled{% endif %}>
+                        <small>Use the REST endpoint ending in <code>/api/v4</code>.</small>
+                    </label>
+                    <label class="integration-field">
+                        <span>Access token</span>
+                        <input name="token" type="password" placeholder="{% if instance.token_configured %}Stored — leave blank to keep{% else %}Enter access token{% endif %}" autocomplete="new-password" {% if not can_manage_integrations %}disabled{% endif %}>
+                        <small>Connection test verifies authentication and project discovery; Config Guard CI Lint is project-scoped.</small>
+                    </label>
+                    <label class="integration-field">
+                        <span>Connection enabled</span>
+                        <select name="enabled" {% if not can_manage_integrations %}disabled{% endif %}>
+                            <option value="true" {% if instance.enabled %}selected{% endif %}>Enabled</option>
+                            <option value="false" {% if not instance.enabled %}selected{% endif %}>Disabled</option>
+                        </select>
+                        <small>Controls whether this stored credential can be tested or used.</small>
+                    </label>
+                    <label class="integration-field">
+                        <span>Pipeline polling</span>
+                        <select name="polling_enabled" {% if not can_manage_integrations %}disabled{% endif %}>
+                            <option value="true" {% if instance.polling_enabled %}selected{% endif %}>Enabled</option>
+                            <option value="false" {% if not instance.polling_enabled %}selected{% endif %}>Disabled</option>
+                        </select>
+                        <small>Only one connection per GitLab host may poll pipelines. Other credentials remain independently testable.</small>
+                    </label>
+                </div>
+
+                <dl class="gitlab-instance-metadata">
+                    <div>
+                        <dt>Credential</dt>
+                        <dd>{{ instance.credential_ref }}</dd>
+                    </div>
+                    <div>
+                        <dt>Latest check</dt>
+                        <dd class="{% if instance.test_status == 'healthy' %}test-healthy{% elif instance.test_status == 'failed' %}test-failed{% endif %}">
+                            {% if instance.tested_at %}
+                            {{ instance.tested_at|localtime('%Y-%m-%d %H:%M') }}{% if instance.test_message %} · {{ instance.test_message }}{% endif %}
+                            {% else %}
+                            Not tested yet
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Last successful check</dt>
+                        <dd>
+                            {% if instance.last_successful_check %}
+                            {{ instance.last_successful_check.at|localtime('%Y-%m-%d %H:%M') }}{% if instance.last_successful_check.message %} · {{ instance.last_successful_check.message }}{% endif %}
+                            {% else %}
+                            No successful check recorded
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+
+                <footer class="gitlab-instance-actions">
+                    <span data-instance-feedback aria-live="polite">
+                        {% if connector.source == 'environment' %}
+                        Saving imports the current environment credential into encrypted UI-managed storage.
+                        {% elif not instance.enabled %}
+                        Enable and save this connection before testing it.
+                        {% elif not instance.token_configured %}
+                        Save a token before testing this connection.
+                        {% else %}
+                        Changes must be saved before the connection test uses them.
+                        {% endif %}
+                    </span>
+                    <div>
+                        <button type="submit" class="btn btn-primary" {% if not can_manage_integrations %}disabled{% endif %}>{{ 'Import & save' if connector.source == 'environment' else 'Save this GitLab' }}</button>
+                        <button
+                            type="submit"
+                            form="gitlab-instance-test-{{ instance.id }}"
+                            class="btn btn-outline gitlab-instance-test"
+                            {% if not can_manage_integrations or not instance.token_configured or not instance.enabled %}disabled{% endif %}
+                            {% if not instance.token_configured %}title="Save an access token before testing this GitLab"{% elif not instance.enabled %}title="Enable and save this GitLab before testing it"{% endif %}
+                        >{{ icons.icon('rotate', 'icon-sm') }} <span>Test</span></button>
+                        <button
+                            type="submit"
+                            form="gitlab-instance-delete-{{ instance.id }}"
+                            class="btn btn-ghost gitlab-remove-instance"
+                            {% if not can_manage_integrations %}disabled{% endif %}
+                        >Remove</button>
+                    </div>
+                </footer>
+            </form>
+            {% else %}
+            <div class="integration-empty-state" data-gitlab-empty>
+                <strong>No GitLab connections</strong>
+                <span>Add one to begin receiving and polling pipelines.</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <template data-gitlab-instance-template>
+            <form method="post" action="/integrations/gitlab/instances" class="gitlab-instance-editor is-new" data-gitlab-instance data-submit-progress="Creating…">
+                <header>
+                    <div>
+                        <span class="gitlab-instance-number">New GitLab</span>
+                        <strong>New connection</strong>
+                    </div>
+                    <span class="gitlab-instance-state"><i aria-hidden="true"></i>Not saved</span>
+                </header>
+                <div class="gitlab-instance-fields">
+                    <label class="integration-field">
+                        <span>Display name</span>
+                        <input name="name" type="text" placeholder="Production GitLab" autocomplete="off" required>
+                    </label>
+                    <label class="integration-field wide">
+                        <span>API URL</span>
+                        <input name="api_url" type="url" placeholder="https://gitlab.example/api/v4" autocomplete="off" required>
+                        <small>Use the REST endpoint ending in <code>/api/v4</code>.</small>
+                    </label>
+                    <label class="integration-field">
+                        <span>Access token</span>
+                        <input name="token" type="password" placeholder="Enter access token" autocomplete="new-password" required>
+                        <small>Connection test verifies authentication and project discovery; Config Guard CI Lint is project-scoped.</small>
+                    </label>
+                    <label class="integration-field">
+                        <span>Connection enabled</span>
+                        <select name="enabled">
+                            <option value="true" selected>Enabled</option>
+                            <option value="false">Disabled</option>
+                        </select>
+                    </label>
+                    <label class="integration-field">
+                        <span>Pipeline polling</span>
+                        <select name="polling_enabled">
+                            <option value="true" selected>Enabled</option>
+                            <option value="false">Disabled</option>
+                        </select>
+                        <small>Only one connection per GitLab host may poll pipelines.</small>
+                    </label>
+                </div>
+                <footer class="gitlab-instance-actions">
+                    <span>This connection can be tested after it is saved.</span>
+                    <div>
+                        <button type="submit" class="btn btn-primary">Create GitLab</button>
+                        <button type="button" class="btn btn-ghost gitlab-cancel-new-instance">Cancel</button>
+                    </div>
+                </footer>
+            </form>
+        </template>
+
+        {% for instance in connector.instances %}
+        <form
+            id="gitlab-instance-test-{{ instance.id }}"
+            method="post"
+            action="/integrations/gitlab/instances/{{ instance.id }}/test"
+            class="gitlab-instance-test-form"
+            data-instance-test-form
+            data-submit-progress="Testing…"
+        ></form>
+        <form
+            id="gitlab-instance-delete-{{ instance.id }}"
+            method="post"
+            action="/integrations/gitlab/instances/{{ instance.id }}/delete"
+            class="gitlab-instance-delete-form"
+            data-confirm-submit="Remove {{ instance.name }}? This removes its stored credential and current health state; audit events are retained."
+            data-submit-progress="Removing…"
+        ></form>
+        {% endfor %}
+
+        {% else %}
+        <form method="post" action="/integrations/{{ connector.key }}/save" class="integration-settings-form" data-submit-progress="Saving…">
+            <div class="integration-fields">
+                {% for field in connector.fields %}
+                <label class="integration-field">
+                    <span>{{ field.label }}</span>
+                    {% if field.kind == 'boolean' %}
+                    <select name="{{ field.name }}" {% if not can_manage_integrations %}disabled{% endif %}>
+                        <option value="true" {% if field.value == 'true' %}selected{% endif %}>Yes</option>
+                        <option value="false" {% if field.value == 'false' %}selected{% endif %}>No</option>
+                    </select>
+                    {% else %}
+                    <input
+                        name="{{ field.name }}"
+                        type="{% if field.secret %}password{% elif field.kind in ['url', 'url_optional'] %}url{% else %}text{% endif %}"
+                        value="{% if not field.secret %}{{ field.value }}{% endif %}"
+                        placeholder="{% if field.secret and field.configured %}Configured — leave blank to keep{% elif field.secret %}Enter credential{% endif %}"
+                        autocomplete="{% if field.secret %}new-password{% else %}off{% endif %}"
+                        {% if not can_manage_integrations %}disabled{% endif %}
+                    >
+                    {% endif %}
+                    {% if field.secret and field.configured %}<small>Stored securely; value is hidden.</small>{% endif %}
+                </label>
+                {% endfor %}
+            </div>
+            <div class="integration-form-actions">
+                <button type="submit" class="btn btn-primary integration-save-button" {% if not can_manage_integrations %}disabled{% endif %}>Save configuration</button>
+            </div>
+        </form>
+        {% endif %}
+
+        {% if connector.key != 'gitlab' %}
+        <footer class="integration-config-footer">
+            <div class="integration-config-meta">
+                <span><b>Credential ref</b> {{ connector.credential_ref }}</span>
+                {% if connector.updated_at %}<span><b>Updated</b> {{ connector.updated_at|localtime('%Y-%m-%d %H:%M') }}{% if connector.updated_by %} by {{ connector.updated_by }}{% endif %}</span>{% endif %}
+                {% if connector.tested_at %}<span class="test-{{ connector.test_status }}"><b>Latest check</b> {{ connector.tested_at|localtime('%Y-%m-%d %H:%M') }} · {{ connector.test_message }}</span>{% endif %}
+                <span>
+                    <b>Last successful check</b>
+                    {% if connector.last_successful_check %}
+                    {{ connector.last_successful_check.at|localtime('%Y-%m-%d %H:%M') }} · {{ connector.last_successful_check.message }}
+                    {% else %}
+                    No successful check recorded
+                    {% endif %}
+                </span>
+            </div>
+            <div class="integration-config-actions">
+                <form method="post" action="/integrations/{{ connector.key }}/test" data-submit-progress="Testing…">
+                    <button type="submit" class="btn btn-outline" {% if not can_manage_integrations or not connector.configured %}disabled{% endif %} title="{% if connector.key == 'mattermost' %}Sends one test message{% else %}Checks the configured endpoint{% endif %}">Test connection</button>
+                </form>
+                <form method="post" action="/integrations/{{ connector.key }}/disable" data-confirm-submit="Disable {{ connector.name }}? Existing credentials will remain stored, but the integration will stop running." data-submit-progress="Disabling…">
+                    <button type="submit" class="btn btn-ghost" {% if not can_manage_integrations %}disabled{% endif %}>Disable integration</button>
+                </form>
+            </div>
+        </footer>
+        {% endif %}
+    </div>
+</aside>

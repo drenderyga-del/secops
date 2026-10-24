@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Product targets · ScanOps{% endblock %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>Targets</h1>
+            <p>Product targets group ownership, policy and repository-level posture.</p>
+        </div>
+        <nav class="module-tabs" aria-label="Target level">
+            <a class="module-tab active" href="/targets/operator?level=product" aria-current="page">Product targets</a>
+            <a class="module-tab" href="/targets/operator?level=repository">Repository targets</a>
+        </nav>
+    </div>
+
+    <details id="maintenance" class="page-section maintenance-panel">
+        <summary>
+            <span>{{ icons.icon('gear', 'icon-sm') }} Product data maintenance</span>
+            <small>Administrative actions</small>
+        </summary>
+        <div class="maintenance-panel-body">
+            <p>Repair imported GitLab paths or remove duplicate product records. These actions are not part of the normal monitoring workflow.</p>
+            <div class="page-actions">
+                <form method="post" action="/products/normalize-paths" style="margin: 0;">
+                    <button type="submit" class="btn btn-outline btn-sm">Normalize product links</button>
+                </form>
+                <form method="post" action="/products/cleanup-duplicates" style="margin: 0;">
+                    <button type="submit" class="btn btn-outline btn-sm">Cleanup duplicates</button>
+                </form>
+            </div>
+        </div>
+    </details>
+
+    <section id="products" class="page-section table-container" tabindex="0" aria-label="Products">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Repositories</th>
+                    <th>Control coverage</th>
+                    <th>Coverage</th>
+                    <th>Pipeline Health</th>
+                    <th>Duration</th>
+                    <th>Config Findings</th>
+                    <th>Last Scan</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product_data in products %}
+                <tr>
+                    <td>
+                        <div class="product-info">
+                            <strong>{{ product_data.product.name }}</strong>
+                            {% if product_data.group_url %}
+                                <small><a href="{{ product_data.group_url }}" target="_blank" rel="noopener noreferrer">{{ product_data.group_path }}</a></small>
+                            {% else %}
+                                <small>{{ product_data.group_path }}</small>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge">{{ product_data.total_repositories }}</span>
+                    </td>
+                    <td>
+                        {% set controls = product_data.control_coverage %}
+                        {% if controls.expected %}
+                            <div class="pipeline-health">
+                                <span class="pill {% if controls.missing %}failed{% else %}success{% endif %}">
+                                    {{ controls.configured }} / {{ controls.expected }}
+                                </span>
+                                <span class="pipeline-rate">configured controls</span>
+                            </div>
+                        {% else %}
+                            <span class="no-data">No control policy</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set cov = product_data.audit_coverage %}
+                        {% if cov.total %}
+                            {% set cov_rate = ((cov.covered / cov.total) * 100) | round(1) %}
+                            <div class="pipeline-health">
+                                <span class="pill success">
+                                    {{ icons.icon('check', 'icon-sm') }}
+                                    {{ cov.covered }} / {{ cov.total }}
+                                </span>
+                                <span class="pipeline-rate">{{ cov_rate }}% connected</span>
+                            </div>
+                        {% else %}
+                            <span class="no-data">No audit data</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set stats = product_data.job_stats %}
+                        {% if stats.total %}
+                        <div class="pipeline-health">
+                            <span class="pill success">
+                                {{ icons.icon('check', 'icon-sm') }}
+                                {{ stats.success }}
+                            </span>
+                            <span class="pill failed">
+                                {{ icons.icon('x', 'icon-sm') }}
+                                {{ stats.failed }}
+                            </span>
+                            <span class="pipeline-rate">{{ stats.success_rate }}% success</span>
+                        </div>
+                        {% else %}
+                            <span class="no-data">No runs yet</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="pipeline-health">
+                            <span class="pill">{{ icons.icon('clock', 'icon-sm') }} {{ product_data.pipeline_duration.avg_label }}</span>
+                            <span class="pipeline-rate">avg pipeline · 30d</span>
+                        </div>
+                    </td>
+                    <td>
+                        {% if product_data.config_scan_summary %}
+                            <div style="display: flex; gap: 0.25rem; flex-wrap: wrap; align-items: center;">
+                                {% if product_data.config_scan_summary.critical %}<span class="pill failed" title="Critical">C:{{ product_data.config_scan_summary.critical }}</span>{% endif %}
+                                {% if product_data.config_scan_summary.high %}<span class="pill failed" title="High">H:{{ product_data.config_scan_summary.high }}</span>{% endif %}
+                                {% if product_data.config_scan_summary.medium %}<span class="pill" style="background: var(--warning-bg, #fef3cd); color: var(--warning-text, #856404);" title="Medium">M:{{ product_data.config_scan_summary.medium }}</span>{% endif %}
+                                {% if not product_data.config_scan_summary.critical and not product_data.config_scan_summary.high and not product_data.config_scan_summary.medium %}
+                                    <span class="pill success">{{ icons.icon('check', 'icon-sm') }} Clean</span>
+                                {% endif %}
+                                <a href="/config-scan/products/{{ product_data.product.id }}" class="btn btn-ghost btn-sm" aria-label="Config Scan details" title="Config Scan details">{{ icons.icon('gear', 'icon-sm') }}</a>
+                            </div>
+                        {% elif product_data.config_scan_findings > 0 %}
+                            <span class="badge">{{ product_data.config_scan_findings }}</span>
+                            <a href="/config-scan/products/{{ product_data.product.id }}" class="btn btn-ghost btn-sm" aria-label="Config Scan details" title="Config Scan details">{{ icons.icon('gear', 'icon-sm') }}</a>
+                        {% else %}
+                            <span class="no-data">No scan</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if product_data.last_scan %}
+                            <span class="timestamp">{{ product_data.last_scan|localtime('%Y-%m-%d %H:%M') }}</span>
+                        {% else %}
+                            <span class="no-data">Never</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <a href="{{ product_target_url(product_data.product.id) }}" class="btn btn-ghost">
+                                <span>Open product target</span>
+                                {{ icons.icon('arrow-right', 'icon-sm') }}
+                            </a>
+                            <form method="post" action="/products/{{ product_data.product.id }}/delete" onsubmit="return confirm('Delete this product and all linked repositories?');" style="margin: 0;">
+                                <button type="submit" class="btn btn-outline btn-sm">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    {% if not products %}
+    <div class="empty-state">
+        <div class="empty-icon">{{ icons.icon('cube', 'icon-lg') }}</div>
+        <h2>No product targets yet</h2>
+        <p>Product targets appear after GitLab CI jobs start sending repository data.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}{{ view_title }} - DevSecOps Platform{% endblock %}
+
+{% block content %}
+<div class="logs-page{% if view_mode == 'failed' %} failed-jobs-page{% endif %}">
+    <div class="page-header signal-page-header compact{% if view_mode == 'failed' %} failed-jobs-header{% endif %}">
+        <div>
+            <span class="page-eyebrow">Execution journal</span>
+            <h1>{{ view_title }}</h1>
+            <p>{{ view_description }}</p>
+        </div>
+        {% if repo_locked %}
+        <div class="page-actions">
+            <span class="breadcrumb-tag">
+                {{ icons.icon('branch', 'icon-sm') }}
+                <span>{{ repo_display_name }}</span>
+            </span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if view_mode == 'failed' %}
+    <section class="failed-command-strip" aria-label="Failed job workflow">
+        <span><b>1</b> Filter by scanner or repository</span>
+        <span><b>2</b> Open the originating pipeline</span>
+        <span><b>3</b> Retry in the owning system</span>
+    </section>
+    {% endif %}
+
+    <section id="categories" class="page-section job-category-bar">
+        {% for cat in job_categories %}
+            {% set is_active = (cat.value == category|lower) %}
+            <a class="category-card{% if is_active %} active{% endif %}"
+               href="{{ base_path }}?category={{ cat.value }}&status={{ status_filter }}&timeframe={{ timeframe }}">
+                <span class="category-icon">{{ icons.icon(cat.icon) }}</span>
+                <span class="category-label">{{ cat.label }}</span>
+            </a>
+        {% endfor %}
+    </section>
+
+    <form id="filters" class="page-section filter-bar signal-filter-surface" method="get" aria-label="Filter jobs">
+        <input type="hidden" name="category" value="{{ category }}">
+        <input type="hidden" name="page" value="1">
+        {% if repo_locked %}
+        <input type="hidden" name="repo" value="{{ repo_filter }}">
+        <div class="filter-field locked-field">
+            <label>Repository</label>
+            <div class="locked-value">
+                {{ icons.icon('branch', 'icon-sm') }}
+                <span>{{ repo_display_name }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="filter-field autocomplete-field">
+            <label for="repo">Repository</label>
+            <div class="autocomplete" data-auto-apply="true" data-type="repo" data-endpoint="/api/failed_job_filters" data-only-failed="{{ 'true' if view_mode == 'failed' else 'false' }}" data-category="{{ category }}" data-timeframe="{{ timeframe }}" data-suggestions='{{ repo_options | tojson }}'>
+                <input type="text" name="repo" id="repo" value="{{ repo_filter }}" placeholder="Filter by repository" autocomplete="off">
+                <button type="button" class="filter-clear" data-clear-filter="repo" aria-label="Clear repository filter">{{ icons.icon('x-circle', 'icon-sm') }}</button>
+                <div class="suggestions" aria-hidden="true"></div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="filter-field autocomplete-field">
+            <label for="job">Job name</label>
+            <div class="autocomplete" data-auto-apply="true" data-type="job" data-endpoint="/api/failed_job_filters" data-only-failed="{{ 'true' if view_mode == 'failed' else 'false' }}" data-category="{{ category }}" data-timeframe="{{ timeframe }}" data-suggestions='{{ job_options | tojson }}'>
+                <input type="text" name="job" id="job" value="{{ job_filter }}" placeholder="Filter by job name" autocomplete="off">
+                <button type="button" class="filter-clear" data-clear-filter="job" aria-label="Clear job filter">{{ icons.icon('x-circle', 'icon-sm') }}</button>
+                <div class="suggestions" aria-hidden="true"></div>
+            </div>
+        </div>
+        <div class="filter-field select-field">
+            <label for="status">Status</label>
+            <div class="select">
+                <select name="status" id="status" data-auto-submit="true">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+                    <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+                    <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+        </div>
+        <div class="filter-field select-field">
+            <label for="timeframe">Timeframe</label>
+            <div class="select">
+                <select name="timeframe" id="timeframe" data-auto-submit="true">
+                    {% for option in timeframe_options %}
+                        <option value="{{ option.value }}" {% if option.value == timeframe %}selected{% endif %}>
+                            {{ option.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="filter-actions">
+            <a href="{{ base_path }}?timeframe={{ timeframe }}{% if repo_locked %}&repo={{ repo_filter | urlencode }}{% endif %}" class="btn btn-outline btn-sm">{{ icons.icon('rotate', 'icon-sm') }}<span>Reset</span></a>
+        </div>
+    </form>
+
+    {% if duration_summary or job_duration_summary %}
+    <section id="metrics" class="page-section stats-grid duration-grid">
+        {% if duration_summary %}
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('clock') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ duration_summary.avg_label }}</strong>
+                <p>Avg pipeline</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('layers') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ duration_summary.latest_label }}</strong>
+                <p>Last pipeline</p>
+            </div>
+        </div>
+        {% endif %}
+        {% if job_duration_summary %}
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('gear') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ job_duration_summary.avg_label }}</strong>
+                <p>Avg job</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('check-circle') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ job_duration_summary.count }}</strong>
+                <p>Jobs measured</p>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    <section id="jobs" class="page-section table-container" tabindex="0" aria-label="Execution jobs">
+        <div class="table-meta">
+            {% if total_count %}
+                <span>Showing {{ page_start }}&ndash;{{ page_end }} of {{ total_count }} {{ meta_label }}</span>
+            {% else %}
+                <span>No {{ meta_label }} match the filters.</span>
+            {% endif %}
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Repository</th>
+                    <th>Job Name</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                    <th>{% if view_mode == 'failed' %}Failed At{% else %}Finished At{% endif %}</th>
+                    <th>Ref</th>
+                    <th>Pipeline</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for job in jobs %}
+                <tr>
+                    <td>
+                        <div class="repo-info">
+                            <strong>{{ job.repository.path }}</strong>
+                            <small>
+                                {% if job.repository.product %}
+                                    {{ job.repository.product.name }}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="job-info">
+                            <strong>{{ job.job_name }}</strong>
+                        </div>
+                    </td>
+                    <td>
+                        {% set status = job.job_status.label if job.job_status else 'unknown' %}
+                        {% if status == 'success' %}
+                            <span class="status-badge success">{{ icons.icon('check-circle', 'icon-sm') }}&nbsp;Success</span>
+                        {% elif status == 'failed' %}
+                            <span class="status-badge error">{{ icons.icon('x-circle', 'icon-sm') }}&nbsp;Failed</span>
+                        {% elif status == 'running' %}
+                            <span class="status-badge running">{{ icons.icon('spinner', 'icon-rotate icon-sm') }}&nbsp;Running</span>
+                        {% elif status == 'cancelled' %}
+                            <span class="status-badge cancelled">{{ icons.icon('stop', 'icon-sm') }}&nbsp;Cancelled</span>
+                        {% elif status == 'skipped' %}
+                            <span class="status-badge skipped">{{ icons.icon('forward', 'icon-sm') }}&nbsp;Skipped</span>
+                        {% else %}
+                            <span class="status-badge unknown">{{ icons.icon('question-circle', 'icon-sm') }}&nbsp;{{ status|capitalize }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="timestamp">{{ job.duration_seconds | duration }}</span>
+                    </td>
+                    <td>
+                        <span class="timestamp">{{ job.finished_at|localtime('%Y-%m-%d %H:%M:%S') }}</span>
+                    </td>
+                    <td>
+                        <span class="ref-badge">{{ job.ref or '—' }}</span>
+                    </td>
+                    <td>
+                        {% set pipeline_url = pipeline_urls_by_job_id.get(job.id) if pipeline_urls_by_job_id is defined else none %}
+                        {% if pipeline_url %}
+                            <a href="{{ pipeline_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">
+                                {{ icons.icon('arrow-up-right', 'icon-sm') }}
+                                <span>View pipeline</span>
+                            </a>
+                        {% else %}
+                            <span class="no-data">N/A</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if not jobs %}
+        <div class="empty-state">
+            <div class="empty-icon">{{ icons.icon('thumb-up', 'icon-lg') }}</div>
+            <h2>{{ empty_title }}</h2>
+            <p>{{ empty_text }}</p>
+        </div>
+        {% endif %}
+
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            <span>Page {{ page }} of {{ total_pages }}</span>
+            <div class="pagination-controls">
+                {% if page > 1 %}
+                    <a class="btn btn-outline btn-sm" href="{{ base_path }}?category={{ category }}&repo={{ repo_filter | urlencode }}&job={{ job_filter | urlencode }}&status={{ status_filter }}&timeframe={{ timeframe }}&page={{ page - 1 }}">
+                        {{ icons.icon('arrow-left', 'icon-sm') }}
+                        <span>Prev</span>
+                    </a>
+                {% endif %}
+                {% if page < total_pages %}
+                    <a class="btn btn-outline btn-sm" href="{{ base_path }}?category={{ category }}&repo={{ repo_filter | urlencode }}&job={{ job_filter | urlencode }}&status={{ status_filter }}&timeframe={{ timeframe }}&page={{ page + 1 }}">
+                        <span>Next</span>
+                        {{ icons.icon('arrow-right', 'icon-sm') }}
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

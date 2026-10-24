@@ -1,0 +1,67 @@
+{% import 'macros/cscan_harbor.html' as harbor %}
+{% import 'macros/icons.html' as icons %}
+<div class="table-container cscan-results-table-wrap" tabindex="0" aria-label="Configuration scan repository results">
+    <table class="data-table cscan-repo-table cscan-repo-table--compact">
+        <thead>
+            <tr>
+                <th class="cscan-col-repo">Repository</th>
+                <th class="cscan-col-num">#</th>
+                <th class="cscan-col-sev">Status</th>
+                <th class="cscan-col-num">Warn</th>
+                <th class="cscan-col-details">Findings</th>
+                <th class="cscan-col-gitlab">GitLab</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set frid = cscan_findings_run_id | default(none) %}
+            {% for repo in g.repos %}
+            {% set row_run_id = repo.findings_run_id | default(frid, true) %}
+            <tr data-repo-path="{{ repo.project_path|lower }}">
+                <td>
+                    {% if row_run_id and repo.findings_count > 0 %}
+                        <a href="/config-scan/runs/{{ row_run_id }}/findings?project={{ repo.project_path | urlencode }}" class="cscan-repo-path cscan-repo-path--internal">{{ repo.project_path }}</a>
+                    {% else %}
+                        <span class="cscan-repo-path">{{ repo.project_path }}</span>
+                    {% endif %}
+                </td>
+                <td class="cscan-td-num"><span class="badge {% if repo.findings_count %}badge-danger{% endif %}">{{ repo.findings_count }}</span></td>
+                <td class="cscan-td-sev">
+                    <div class="cscan-sev-cell cscan-sev-cell--compact">
+                        {{ harbor.cscan_harbor_severity(repo.findings_summary) }}
+                        <div class="cscan-sev-pills cscan-sev-pills--mini" aria-hidden="true">
+                            {% if repo.findings_summary.critical %}<span class="pill pill-sev pill-sev--critical">C:{{ repo.findings_summary.critical }}</span>{% endif %}
+                            {% if repo.findings_summary.high %}<span class="pill pill-sev pill-sev--high">H:{{ repo.findings_summary.high }}</span>{% endif %}
+                            {% if repo.findings_summary.medium %}<span class="pill pill-sev pill-sev--medium">M:{{ repo.findings_summary.medium }}</span>{% endif %}
+                            {% if repo.findings_summary.low %}<span class="pill pill-sev pill-sev--low">L:{{ repo.findings_summary.low }}</span>{% endif %}
+                            {% if repo.findings_summary.info %}<span class="pill pill-sev pill-sev--info">I:{{ repo.findings_summary.info }}</span>{% endif %}
+                        </div>
+                    </div>
+                </td>
+                <td class="cscan-td-num">
+                    {% if repo.warnings_count %}
+                    <span class="cscan-warn-pill">{{ repo.warnings_count }}</span>
+                    {% else %}
+                    <span class="cscan-warn-pill cscan-warn-pill--zero">0</span>
+                    {% endif %}
+                </td>
+                <td class="cscan-details-cell">
+                    {% if row_run_id and repo.findings_count > 0 %}
+                    <a href="/config-scan/runs/{{ row_run_id }}/findings?project={{ repo.project_path | urlencode }}" class="btn btn-outline btn-sm cscan-findings-page-link">{{ icons.icon('arrow-right', 'icon-sm') }} Open</a>
+                    {% elif repo.findings_count > 0 %}
+                    <span class="no-data" title="Open from run page">—</span>
+                    {% else %}
+                    <span class="no-data">—</span>
+                    {% endif %}
+                </td>
+                <td class="cscan-gitlab-cell">
+                    {% if repo.project_url %}
+                    <a href="{{ repo.project_url }}" target="_blank" rel="noreferrer" class="btn btn-ghost btn-sm cscan-gitlab-link">{{ icons.icon('arrow-up-right', 'icon-sm') }} GitLab</a>
+                    {% else %}
+                    <span class="no-data">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,2 @@
+ALTER TABLE iac_scan_runs ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMPTZ;
+ALTER TABLE iac_scan_runs ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;

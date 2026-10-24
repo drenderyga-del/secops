@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/data_surfaces.html' as data_surfaces %}
+
+{% block title %}{{ repository.path }} · Target 360 · ScanOps{% endblock %}
+
+{% block content %}
+<div class="target360-page">
+    <header class="page-header signal-page-header compact target360-header">
+        <div>
+            <span class="page-eyebrow">Target 360</span>
+            <h1>{{ repository.path }}</h1>
+            <p>Controls, freshness and end-to-end execution evidence for {{ product.name if product else 'this repository' }}.</p>
+        </div>
+        <div class="page-actions">
+            {% if product %}<a class="btn btn-secondary" href="{{ product_target_url(product.id) }}">{{ icons.icon('arrow-left', 'icon-sm') }} Open product target</a>{% endif %}
+            <a class="btn btn-secondary" href="/repos/{{ repository.id }}/jobs">{{ icons.icon('layers', 'icon-sm') }} View job logs</a>
+        </div>
+    </header>
+
+    <section id="posture" class="page-section target360-posture" aria-label="Target posture summary">
+        <div class="target360-kpi">
+            <span>Control coverage</span>
+            <strong>{{ coverage.configured }} / {{ coverage.expected }}</strong>
+            <small>{{ coverage.missing }} missing · {{ coverage.excluded }} excluded</small>
+        </div>
+        <div class="target360-kpi freshness-{{ freshness.state }}">
+            <span>Freshness</span>
+            <strong>{{ freshness.label }}</strong>
+            <small>{{ freshness.observed_at|localtime('%Y-%m-%d %H:%M') if freshness.observed_at else 'Awaiting first signal' }}</small>
+        </div>
+        <div class="target360-kpi">
+            <span>Runs / failures</span>
+            <strong>{{ summary.executions }} / {{ summary.failed_executions }}</strong>
+            <small>Repository-scoped executions</small>
+        </div>
+        <div class="target360-kpi">
+            <span>Artifacts / delivery</span>
+            <strong>{{ summary.artifacts }} / {{ summary.confirmed_deliveries }}</strong>
+            <small>Produced / confirmed</small>
+        </div>
+    </section>
+
+    <section class="target360-versions" aria-labelledby="target-versions-title">
+        <div>
+            <span class="river-label">Observed versions</span>
+            <h2 id="target-versions-title">Runtime evidence</h2>
+        </div>
+        {% if versions %}
+        <ul>
+            {% for version in versions %}<li>{{ version }}</li>{% endfor %}
+        </ul>
+        {% else %}
+        <p>No producer or artifact versions have been reported yet.</p>
+        {% endif %}
+    </section>
+
+    <section id="controls" class="page-section target360-section" aria-label="Repository security control coverage">
+        <div class="section-heading">
+            <div>
+                <h2 id="target-controls-title">Security controls</h2>
+                <p>Expected configuration and the latest verification context.</p>
+            </div>
+        </div>
+        {% if controls %}
+        <div class="table-container target360-controls-table has-responsive-table">
+            {% call data_surfaces.responsive_table('target-controls-table', 'target-controls-title', 'wide') %}
+            <table class="data-table">
+                <thead><tr><th>Control</th><th>Scope</th><th>Status</th><th>Source</th><th>Evidence / reason</th><th>Verified</th></tr></thead>
+                <tbody>
+                {% for control in controls %}
+                    <tr>
+                        <td><strong>{{ control.name }}</strong><small>{{ control.key }}{% if control.category %} · {{ control.category }}{% endif %}</small></td>
+                        <td><code>{{ control.scope }}</code></td>
+                        <td><span class="status-badge {{ 'success' if control.status == 'configured' else 'error' if control.status == 'missing' else 'warning' }}">{{ control.status }}</span></td>
+                        <td>{{ control.source or '—' }}</td>
+                        <td>{{ data_surfaces.evidence(control.reason or control.evidence, 'target-control-' ~ loop.index ~ '-evidence', 'Evidence') }}</td>
+                        <td><time datetime="{{ control.last_verified_at or '' }}">{{ control.last_verified_at|localtime('%Y-%m-%d %H:%M') if control.last_verified_at else '—' }}</time></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endcall %}
+        </div>
+        {% else %}
+        <div class="empty-state"><h3>No expected controls</h3><p>Add repository control bindings to calculate coverage.</p></div>
+        {% endif %}
+    </section>
+
+    <section id="timeline" class="page-section target360-section" aria-labelledby="target-timeline-title">
+        <div class="target360-timeline-heading">
+            <div>
+                <h2 id="target-timeline-title">Execution timeline</h2>
+                <p>Scanner-neutral runs ordered by the latest accepted repository evidence.</p>
+            </div>
+            <nav class="module-tabs target360-source-filter signal-filter-links" aria-label="Execution source filter" aria-controls="timeline">
+                {% for option in source_options %}
+                <a class="module-tab{% if selected_source == option.value %} active{% endif %}" href="{{ repository_target_url(repository.id) }}?source={{ option.value }}"{% if selected_source == option.value %} aria-current="page"{% endif %}>{{ option.label }} <b>{{ option.count }}</b></a>
+                {% endfor %}
+            </nav>
+        </div>
+
+        {% if executions %}
+        <div class="target360-timeline">
+            {% for execution in executions %}
+            {% set execution_index = loop.index %}
+            <article class="target360-execution status-{{ execution.status }}">
+                <header>
+                    <span class="target360-source">{{ execution.source_label }}</span>
+                    <div>
+                        <h3>{{ execution.correlation_key }}</h3>
+                        <p>Requested <time datetime="{{ execution.requested_at or '' }}">{{ execution.requested_at|localtime('%Y-%m-%d %H:%M') if execution.requested_at else '—' }}</time></p>
+                    </div>
+                    <span class="status-badge {{ 'success' if execution.status == 'succeeded' else 'error' if execution.status == 'failed' else 'running' if execution.status in ['running', 'delivering'] else 'warning' }}">{{ execution.status }}</span>
+                </header>
+
+                {% if execution.failure_category or execution.failure_reason %}
+                <div class="target360-failure">
+                    <strong>{{ execution.failure_category or 'execution' }}</strong>
+                    {{ data_surfaces.evidence(execution.failure_reason or 'unknown failure', 'target-execution-' ~ execution_index ~ '-failure', 'Diagnostic') }}
+                </div>
+                {% endif %}
+
+                <ol class="target360-flow" tabindex="0" aria-label="Execution steps for {{ execution.correlation_key }}">
+                    {% for step in execution.steps %}
+                    {% set step_index = loop.index %}
+                    <li class="status-{{ step.status }}">
+                        <span aria-hidden="true"></span>
+                        <div>
+                            <strong>{{ step.name }}</strong>
+                            <small>{{ step.source }} · {{ step.status }}</small>
+                            {% if step.failure_reason %}
+                            {{ data_surfaces.evidence(step.failure_reason, 'target-execution-' ~ execution_index ~ '-step-' ~ step_index ~ '-failure', 'Diagnostic') }}
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="status-{{ execution.status }}"><span aria-hidden="true"></span><div><strong>Execution observation</strong><small>No step events recorded</small></div></li>
+                    {% endfor %}
+                </ol>
+
+                {% if execution.artifacts %}
+                <section class="target360-artifacts" aria-label="Artifacts & delivery">
+                    <h4>Artifacts &amp; delivery</h4>
+                    {% for artifact in execution.artifacts %}
+                    {% set artifact_index = loop.index %}
+                    <div class="target360-artifact-row">
+                        <div>
+                            <strong>{{ artifact.kind|upper }}{% if artifact.schema_version %} · {{ artifact.schema_version }}{% endif %}</strong>
+                            <code title="{{ artifact.digest_sha256 }}">sha256:{{ artifact.digest_sha256[:12] }}…</code>
+                            {% if artifact.provenance %}<small>{{ artifact.provenance.source_ref or 'unknown ref' }} · {{ artifact.provenance.source_revision or 'revision unavailable' }}</small>{% endif %}
+                        </div>
+                        <div class="target360-deliveries">
+                        {% for delivery in artifact.deliveries %}
+                            <div class="delivery-{{ delivery.status }}">
+                                <span><b>{{ delivery.destination|upper }}</b> {{ delivery.status }} · {{ delivery.attempt_key }}</span>
+                                {% if delivery.failure_reason %}
+                                {{ data_surfaces.evidence(delivery.failure_reason, 'target-execution-' ~ execution_index ~ '-artifact-' ~ artifact_index ~ '-delivery-' ~ loop.index ~ '-failure', 'Diagnostic') }}
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <span>No delivery attempt</span>
+                        {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </section>
+                {% endif %}
+
+                {% if execution.events %}
+                <details class="target360-events">
+                    <summary>Event evidence <span>{{ execution.events|length }}</span></summary>
+                    <ol>
+                    {% for event in execution.events %}
+                        <li>
+                            <time datetime="{{ event.observed_at }}">{{ event.observed_at|localtime('%Y-%m-%d %H:%M') }}</time>
+                            <strong>{{ event.event_type }}</strong>
+                            {{ data_surfaces.evidence(event.reason, 'target-execution-' ~ execution_index ~ '-event-' ~ loop.index ~ '-reason', 'Evidence', 'No reason supplied') }}
+                            <small>received {{ event.received_at|localtime('%Y-%m-%d %H:%M') if event.received_at else '—' }} · {{ event.source }}</small>
+                        </li>
+                    {% endfor %}
+                    </ol>
+                </details>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state"><h3>No execution evidence</h3><p>No events match this source filter for the target.</p></div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

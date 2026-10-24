@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% set pipelines_url = '/pipelines' %}
+{% import 'macros/data_surfaces.html' as data_surfaces %}
+
+{% block title %}Pipelines · ScanOps{% endblock %}
+
+{% block content %}
+<div class="pipelines-page">
+    <div class="page-header pipelines-page-header">
+        <div>
+            <h1>Pipelines</h1>
+            <p>Retained pipeline activity grouped by the lifecycle state that needs an operator decision.</p>
+        </div>
+    </div>
+
+    <section class="pipeline-summary-section" aria-labelledby="pipeline-summary-title">
+        <header class="pipeline-summary-header">
+            <div>
+                <h2 id="pipeline-summary-title">Lifecycle summary</h2>
+                <p>Counts use the selected scope and period, before the lifecycle group is applied.</p>
+            </div>
+            <p class="pipeline-total-baseline">
+                <span>Total retained</span>
+                <strong>{{ total_count if total_count is not none else 'Unavailable' }}</strong>
+            </p>
+        </header>
+        <nav class="pipeline-group-switcher" aria-label="Pipeline lifecycle group">
+            {% for summary in group_summaries %}
+            <a
+                class="pipeline-group-link pipeline-group-{{ summary.value }}{% if summary.selected %} is-selected{% endif %}"
+                href="{{ pipelines_url }}?{{ summary.query }}"
+                {% if summary.selected %}aria-current="page"{% endif %}
+            >
+                <span class="pipeline-group-heading">
+                    <span>{{ summary.label }}</span>
+                    <strong>{{ summary.count if summary.count is not none else '—' }}</strong>
+                </span>
+                <small>{{ summary.description }}</small>
+            </a>
+            {% endfor %}
+        </nav>
+    </section>
+
+    <section class="pipeline-filter-panel" aria-labelledby="pipeline-filter-title">
+        <div class="pipeline-filter-heading">
+            <div>
+                <h2 id="pipeline-filter-title">Refine this view</h2>
+                <p>Every selection is stored in the URL and survives reload.</p>
+            </div>
+            {% if filters.product_id or filters.repository_id %}
+            <div class="pipeline-scope-summary" aria-label="Selected target scope">
+                {% if filters.product_id %}<span>Product #{{ filters.product_id }}</span>{% endif %}
+                {% if filters.repository_id %}<span>Repository #{{ filters.repository_id }}</span>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        <form method="get" action="{{ pipelines_url }}" class="pipeline-filter-form">
+            <input type="hidden" name="group" value="{{ filters.group.value }}">
+            <input type="hidden" name="page" value="1">
+            <input type="hidden" name="page_size" value="{{ pagination.page_size }}">
+            {% if filters.product_id %}<input type="hidden" name="product" value="{{ filters.product_id }}">{% endif %}
+            {% if filters.repository_id %}<input type="hidden" name="repository" value="{{ filters.repository_id }}">{% endif %}
+            <label class="filter-field">
+                <span>Period</span>
+                <select name="timeframe">
+                    {% for option in filter_context.timeframes %}
+                    <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="filter-field">
+                <span>Status</span>
+                <select name="status">
+                    <option value=""{% if not filters.status %} selected{% endif %}>Any status in this group</option>
+                    {% for option in filter_context.statuses %}
+                    <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary">Apply filters</button>
+            <a class="btn btn-ghost" href="{{ pipelines_url }}?{{ filter_context.clear_query }}">Clear filters</a>
+        </form>
+    </section>
+
+    {% if load_error %}
+    <section class="pipeline-page-state pipeline-error-state" role="alert" aria-labelledby="pipeline-error-title">
+        <div class="pipeline-state-icon" aria-hidden="true">{{ icons.icon('warning', 'icon-lg') }}</div>
+        <div>
+            <h2 id="pipeline-error-title">{{ load_error.heading }}</h2>
+            <p>{{ load_error.body }}</p>
+            <div class="pipeline-state-actions">
+                <a class="btn btn-primary" href="{{ load_error.retry_url }}">Retry this view</a>
+                <a class="btn btn-ghost" href="{{ pipelines_url }}">Return to default</a>
+            </div>
+        </div>
+    </section>
+    {% else %}
+    <section id="pipelines" class="page-section table-container pipelines-table-container has-responsive-table" aria-label="Pipeline result set">
+        <div class="table-toolbar pipeline-table-toolbar">
+            <div>
+                <h2 id="pipeline-list-title">Pipeline list</h2>
+                <p>Showing <strong>{{ matching_count }}</strong> of <strong>{{ total_count }}</strong> pipelines</p>
+            </div>
+            <nav aria-label="Rows per page">
+                <a href="{{ pipelines_url }}?{{ pagination.size_25_query }}"{% if pagination.page_size == 25 %} aria-current="page"{% endif %}>25 per page</a>
+                <a href="{{ pipelines_url }}?{{ pagination.size_50_query }}"{% if pagination.page_size == 50 %} aria-current="page"{% endif %}>50 per page</a>
+            </nav>
+        </div>
+
+        {% if pipelines %}
+        {% call data_surfaces.responsive_table('pipelines-data-table', 'pipeline-list-title') %}
+        <table class="data-table pipelines-table">
+            <thead>
+                <tr>
+                    <th>Pipeline</th>
+                    <th>Repository</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                    <th>Jobs</th>
+                    <th>Last activity</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in pipelines %}
+                {% set pipeline = item.pipeline %}
+                {% set repo = item.repository %}
+                {% set product = item.product %}
+                <tr>
+                    <td>
+                        <div class="job-info">
+                            {% if item.pipeline_url %}
+                                <strong><a href="{{ item.pipeline_url }}" target="_blank" rel="noopener noreferrer">#{{ pipeline.pipeline_id }}</a></strong>
+                            {% else %}
+                                <strong>#{{ pipeline.pipeline_id }}</strong>
+                            {% endif %}
+                            <small>Project {{ pipeline.project_id }}</small>
+                        </div>
+                    </td>
+                    <td>
+                        {% if repo %}
+                            <div class="repo-info">
+                                {% if item.repo_url %}
+                                    <strong><a href="{{ item.repo_url }}" target="_blank" rel="noopener noreferrer">{{ repo.path }}</a></strong>
+                                {% else %}
+                                    <strong>{{ repo.path }}</strong>
+                                {% endif %}
+                                <small>ID {{ repo.id }}</small>
+                            </div>
+                        {% else %}
+                            <span class="no-data">Unknown</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set status = pipeline.status.value %}
+                        {% set badge_class = 'success' if status == 'completed' else 'error' if status == 'failed' else 'running' if status == 'polling' else 'warning' if status == 'stale' else 'unknown' %}
+                        <span class="status-badge {{ badge_class }}">
+                            {{ status | capitalize }}
+                        </span>
+                        {% if pipeline.error_message %}
+                            {{ data_surfaces.evidence(pipeline.error_message, 'pipeline-' ~ pipeline.id ~ '-error', 'Diagnostic') }}
+                        {% endif %}
+                    </td>
+                    <td><span class="timestamp">{{ item.duration }}</span></td>
+                    <td><span class="badge">{{ item.job_count }}</span></td>
+                    <td>
+                        <span class="timestamp">{{ item.activity_at|localtime('%Y-%m-%d %H:%M') if item.activity_at else '—' }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endcall %}
+        {% elif empty_state %}
+        <div class="pipeline-page-state pipeline-empty-state">
+            <div class="pipeline-state-icon" aria-hidden="true">{{ icons.icon('search', 'icon-lg') }}</div>
+            <div>
+                <h2>{{ empty_state.heading }}</h2>
+                <p>{{ empty_state.body }}</p>
+                <div class="pipeline-state-actions">
+                    {% for action in empty_state.actions %}
+                    <a class="btn{% if loop.first %} btn-primary{% else %} btn-ghost{% endif %}" href="{{ pipelines_url }}{% if action.query %}?{{ action.query }}{% endif %}">{{ action.label }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if pagination.pages > 1 %}
+        <nav class="pagination" aria-label="Pipelines pagination">
+            {% if pagination.previous_query %}
+            <a class="btn btn-outline btn-sm" href="{{ pipelines_url }}?{{ pagination.previous_query }}">Previous</a>
+            {% endif %}
+            <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+            {% if pagination.next_query %}
+            <a class="btn btn-outline btn-sm" href="{{ pipelines_url }}?{{ pagination.next_query }}">Next</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

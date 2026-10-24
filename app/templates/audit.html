@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/coverage_metrics.html' as coverage %}
+
+{% block title %}Coverage · ScanOps{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Coverage</h1>
+        <p>Repository coverage calculated from real pipeline and security-control execution.</p>
+    </div>
+    <nav class="module-tabs" aria-label="Coverage views">
+        <a class="module-tab active" href="{{ coverage_url }}" aria-current="page">{{ icons.icon('chart', 'icon-sm') }} Current coverage</a>
+        <a class="module-tab" href="{{ coverage_runs_url }}">{{ icons.icon('clock', 'icon-sm') }} Run history</a>
+    </nav>
+</div>
+
+<details id="run" class="page-section coverage-method">
+    <summary>
+        <span>{{ icons.icon('question-circle', 'icon-sm') }} How coverage is calculated</span>
+        <small>14-day execution window</small>
+    </summary>
+    <p>
+        ScanOps checks monitored products for recent pipelines and expected security jobs from
+        <code>AUDIT_SECURITY_JOB_NAMES</code>. The scan runs in the background and updates the repository states below.
+    </p>
+</details>
+
+<section class="page-section audit-control-panel">
+    <div class="audit-control-copy">
+        <h2>Run coverage scan</h2>
+        <p>Choose products or scan the entire monitored landscape.</p>
+    </div>
+    <div class="audit-control-actions">
+        <form method="post" action="/audit/run" class="audit-run-form audit-run-form-panel">
+            <div class="audit-product-select" data-audit-product-select>
+                <button type="button" class="audit-product-trigger audit-product-trigger-card audit-product-trigger-compact" data-product-trigger aria-haspopup="true" aria-expanded="false">
+                    <span class="audit-product-trigger-main">
+                        <span class="audit-product-trigger-label">Products</span>
+                        <strong data-product-summary>
+                            {% if selected_product_ids %}
+                                {{ selected_product_ids|length }} selected
+                            {% else %}
+                                All monitored products
+                            {% endif %}
+                        </strong>
+                    </span>
+                    {{ icons.icon('arrow-right', 'icon-sm') }}
+                </button>
+                <div class="audit-product-panel" data-product-panel>
+                    <input type="text" class="audit-product-search" data-product-search placeholder="Search products..." aria-label="Search products">
+                    <div class="audit-product-options" data-product-options>
+                        {% for product in products %}
+                        <label class="audit-product-option" data-product-name="{{ product.name|lower }}">
+                            <input
+                                type="checkbox"
+                                name="product_ids"
+                                value="{{ product.id }}"
+                                {% if product.id in selected_product_ids %}checked{% endif %}
+                                data-product-checkbox
+                            >
+                            <span>{{ product.name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="audit-product-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" data-product-select-visible>Select visible</button>
+                        <button type="button" class="btn btn-outline btn-sm" data-product-clear>Clear</button>
+                        <button type="button" class="btn btn-primary btn-sm" data-product-apply>Apply</button>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary audit-run-submit" data-run-scan-submit>
+                {{ icons.icon('rotate') }}
+                <span>Run Scan</span>
+            </button>
+        </form>
+        <div class="audit-control-note" aria-live="polite">
+            {% if selected_product_ids %}
+                Only the selected products will be scanned.
+            {% else %}
+                All monitored products will be scanned.
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section id="metrics" class="page-section audit-coverage">
+    <div id="filters" class="audit-coverage-head">
+        <div>
+            <h2>Coverage</h2>
+            {% if summary.last_scanned_at %}
+            <p class="text-muted">Last scan: {{ summary.last_scanned_at|localtime('%Y-%m-%d %H:%M MSK') }}</p>
+            {% else %}
+            <p class="text-muted">No scan has run yet.</p>
+            {% endif %}
+        </div>
+        <form method="get" action="{{ coverage_url }}" class="audit-view-filter filter-bar signal-filter-surface" aria-label="Filter coverage results">
+            {% if selected_product_ids %}<input type="hidden" name="selected_product_ids" value="{{ selected_product_ids | join(',') }}">{% endif %}
+            <input type="hidden" name="status" value="all">
+            <label class="filter-field">
+                <span>Show</span>
+                <select name="only_problems" data-auto-submit="true">
+                    <option value="false" {% if not only_problems %}selected{% endif %}>All repositories</option>
+                    <option value="true" {% if only_problems %}selected{% endif %}>Problems only</option>
+                </select>
+            </label>
+        </form>
+    </div>
+    {{ coverage.coverage_metrics(
+        coverage_metrics,
+        filter_active=coverage_filter_active,
+        matching_count=matching_count,
+        total_count=compact.total
+    ) }}
+</section>
+
+<section id="products" class="page-section audit-product-grid">
+    {% for card in product_cards %}
+    <div class="table-container audit-product-card">
+        <div class="audit-product-header">
+            <div>
+                <h3>{{ card.product.name }}</h3>
+                {% if card.group_url %}
+                <a class="audit-product-link" href="{{ card.group_url }}" target="_blank" rel="noopener noreferrer">{{ card.group_path }}</a>
+                {% elif card.group_path %}
+                <span class="audit-product-link">{{ card.group_path }}</span>
+                {% endif %}
+            </div>
+            <div class="audit-product-stats">
+                <span class="badge">{{ card.counts.total }} repos</span>
+                <span class="badge badge-success">{{ card.counts.active }} active</span>
+                <span class="badge badge-danger">{{ card.counts.not_configured }} not configured</span>
+                <span class="badge badge-warning">{{ card.counts.inactive }} inactive</span>
+            </div>
+        </div>
+        <div class="audit-product-footer">
+            <a class="btn btn-secondary btn-sm" href="{{ product_coverage_url(card.product.id) }}?only_problems={{ 'true' if only_problems else 'false' }}&status={{ status_filter }}">
+                {{ icons.icon('search') }}
+                <span>View coverage</span>
+            </a>
+            <a class="btn btn-ghost btn-sm" href="{{ product_target_url(card.product.id) }}">Open product target</a>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if not product_cards %}
+    <div class="empty-state">
+        <div class="empty-icon">{{ icons.icon('search', 'icon-lg') }}</div>
+        <h3>No audit data</h3>
+        <p>Run the audit scan to build coverage status for repositories.</p>
+    </div>
+    {% endif %}
+</section>
+
+{% if scan_run %}
+{% set scan_progress = (scan_run.processed_repositories * 100 / scan_run.total_repositories)|round(1) if scan_run.total_repositories else 0 %}
+<div
+    id="current-run"
+    class="page-section table-container audit-scan-status {% if scan_run.status in ['running', 'queued'] %}running{% elif scan_run.status == 'failed' %}failed{% endif %}"
+    role="region"
+    aria-labelledby="scan-run-title"
+    aria-describedby="scan-run-status-text"
+    data-audit-scan-status
+    data-run-id="{{ scan_run.id }}"
+    data-run-status="{{ scan_run.status }}"
+>
+    <div class="audit-scan-status-header">
+        <strong id="scan-run-title" data-scan-status-title>
+            {% if scan_run.status == 'running' %}
+                Scan in progress
+            {% elif scan_run.status == 'queued' %}
+                Scan queued
+            {% elif scan_run.status == 'cancelled' %}
+                Scan cancelled
+            {% elif scan_run.status == 'failed' %}
+                Scan failed
+            {% else %}
+                Last scan run
+            {% endif %}
+        </strong>
+        <div class="coverage-current-run-actions">
+            <span class="text-muted">Run #{{ scan_run.id }}</span>
+            <a class="btn btn-ghost btn-sm" href="{{ scan_run.url }}">Open run</a>
+            {% if scan_run.status in ['running', 'queued'] %}
+            <form method="post" action="/audit/scan-cancel" style="margin: 0;">
+                <input type="hidden" name="run_id" value="{{ scan_run.id }}">
+                <button type="submit" class="btn btn-outline btn-sm">Cancel Scan</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <p id="scan-run-status-text" data-scan-status-text>
+        {{ scan_run.diagnostic_excerpt or 'Waiting for status updates...' }}
+    </p>
+    <p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-scan-live-region>
+        {% if scan_run.status == 'running' %}Scan in progress.{% elif scan_run.status == 'queued' %}Scan queued.{% elif scan_run.status == 'cancelled' %}Scan cancelled.{% elif scan_run.status == 'failed' %}Scan failed.{% else %}Last scan run.{% endif %}
+        {{ scan_run.diagnostic_excerpt or 'Waiting for status updates...' }}
+        {% if scan_run.status in ['running', 'queued'] %}{{ scan_run.processed_repositories }} of {{ scan_run.total_repositories }} repositories processed.{% endif %}
+    </p>
+    {% if scan_run.status in ['running', 'queued'] %}
+    <div
+        class="audit-scan-progress"
+        role="progressbar"
+        aria-label="Repositories processed"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="{{ scan_progress }}"
+        aria-valuetext="{{ scan_run.processed_repositories }} of {{ scan_run.total_repositories }} repositories processed"
+        data-scan-progress
+    >
+        <div class="audit-scan-progress-fill" data-scan-progress-bar aria-hidden="true" style="width: {{ scan_progress }}%"></div>
+    </div>
+    <p class="text-muted" data-scan-progress-text>{{ scan_run.processed_repositories }} / {{ scan_run.total_repositories }}</p>
+    {% elif scan_run.diagnostic_is_truncated %}
+    <p class="text-muted">The full diagnostic is available on the run detail page.</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

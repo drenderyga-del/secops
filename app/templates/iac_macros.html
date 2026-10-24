@@ -1,0 +1,36 @@
+{% import 'macros/icons.html' as icons %}
+
+{% macro iac_tabs(active_tab) %}
+<nav class="module-tabs" aria-label="IaC pages">
+    <a href="/iac/operator" class="module-tab {% if active_tab == 'dashboard' %}active{% endif %}"{% if active_tab == 'dashboard' %} aria-current="page"{% endif %}>{{ icons.icon('chart', 'icon-sm') }} Dashboard</a>
+    <a href="/iac/runs" class="module-tab {% if active_tab == 'runs' %}active{% endif %}"{% if active_tab == 'runs' %} aria-current="page"{% endif %}>{{ icons.icon('diagram', 'icon-sm') }} Runs</a>
+    <a href="/iac/repositories" class="module-tab {% if active_tab == 'repositories' %}active{% endif %}"{% if active_tab == 'repositories' %} aria-current="page"{% endif %}>{{ icons.icon('folder', 'icon-sm') }} Repositories</a>
+    <a href="/iac/findings" class="module-tab {% if active_tab == 'findings' %}active{% endif %}"{% if active_tab == 'findings' %} aria-current="page"{% endif %}>{{ icons.icon('warning', 'icon-sm') }} Findings</a>
+</nav>
+{% endmacro %}
+
+{% macro status_badge(status) %}
+    {% set s = (status or 'unknown')|lower %}
+    {% if s in ['succeeded', 'uploaded', 'resolved', 'created', 'completed'] %}
+        <span class="status-badge success">{{ icons.icon('check-circle', 'icon-sm') }}&nbsp;{{ status }}</span>
+    {% elif s in ['failed', 'error'] %}
+        <span class="status-badge error">{{ icons.icon('x-circle', 'icon-sm') }}&nbsp;{{ status }}</span>
+    {% elif s == 'partial' %}
+        <span class="status-badge warning" title="Some repositories were scanned while others failed">{{ icons.icon('warning', 'icon-sm') }}&nbsp;partial</span>
+    {% elif s in ['queued', 'running', 'pending'] %}
+        <span class="status-badge running">{{ icons.icon('spinner', 'icon-sm') }}&nbsp;{{ status }}</span>
+    {% elif s in ['no_iac', 'skipped'] %}
+        <span class="status-badge unknown">{{ status }}</span>
+    {% else %}
+        <span class="status-badge unknown">{{ status or 'unknown' }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% macro severity_pills(critical, high, medium=0) %}
+    <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+        {% if critical %}<span class="pill failed" title="Critical">C:{{ critical }}</span>{% endif %}
+        {% if high %}<span class="pill failed" title="High">H:{{ high }}</span>{% endif %}
+        {% if medium %}<span class="pill" style="background: var(--warning-bg, #fef3cd); color: var(--warning-text, #856404);" title="Medium">M:{{ medium }}</span>{% endif %}
+        {% if not critical and not high and not medium %}<span class="pill success">{{ icons.icon('check', 'icon-sm') }} Clean</span>{% endif %}
+    </div>
+{% endmacro %}

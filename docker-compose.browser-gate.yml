@@ -1,0 +1,8 @@
+services:
+  qa_mock:
+    networks:
+      - demo-network
+
+  seed:
+    volumes:
+      - ${QA_ARTIFACTS_DIR:?Set QA_ARTIFACTS_DIR to an absolute host path}:/qa-artifacts

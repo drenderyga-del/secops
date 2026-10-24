@@ -1,0 +1,48 @@
+{% macro responsive_table(id, labelledby, width='standard') %}
+<div class="responsive-table" data-responsive-table>
+    <p id="{{ id }}-scroll-hint" class="responsive-table-hint">
+        More columns are available. Focus the table, then use the Left and Right Arrow keys to scroll horizontally.
+    </p>
+    <div
+        id="{{ id }}"
+        class="responsive-table-scroll responsive-table-scroll-{{ width }}"
+        role="region"
+        tabindex="0"
+        aria-labelledby="{{ labelledby }}"
+        aria-describedby="{{ id }}-scroll-hint"
+        data-responsive-table-scroll
+    >
+        {{ caller() }}
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro evidence(value, id, label='Evidence', empty='No diagnostic context') %}
+{% set text = value|string if value is not none else '' %}
+{% if text %}
+<div class="evidence-disclosure">
+    <p class="evidence-excerpt">{{ text|truncate(120, true, '…') }}</p>
+    <div class="evidence-controls">
+        <details class="evidence-details">
+            <summary>Expand full {{ label|lower }}</summary>
+            <pre><code id="{{ id }}">{{ text }}</code></pre>
+        </details>
+        <button
+            type="button"
+            class="btn btn-ghost btn-sm evidence-copy-button"
+            data-copy-target="{{ id }}"
+            data-copy-feedback="{{ id }}-copy-feedback"
+        >Copy {{ label|lower }}</button>
+        <span
+            id="{{ id }}-copy-feedback"
+            class="evidence-copy-feedback"
+            role="status"
+            aria-live="polite"
+        ></span>
+    </div>
+</div>
+{% else %}
+<span class="no-data">{{ empty }}</span>
+{% endif %}
+{% endmacro %}

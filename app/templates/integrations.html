@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Integrations · ScanOps{% endblock %}
+
+{% block content %}
+{% set connection_count = namespace(total=0) %}
+{% for connector in connectors %}
+    {% if connector.key == 'gitlab' %}
+        {% set connection_count.total = connection_count.total + (connector.instances|default([])|length) %}
+    {% else %}
+        {% set connection_count.total = connection_count.total + 1 %}
+    {% endif %}
+{% endfor %}
+<div class="integrations-page" data-integration-workspace>
+    <header class="page-header signal-page-header compact">
+        <div>
+            <h1>Integrations</h1>
+            <p>Manage connection endpoints, credentials, and health checks from one workspace.</p>
+        </div>
+        <div class="integration-score">
+            <strong>{{ connection_count.total }}</strong>
+            <span>connections</span>
+        </div>
+    </header>
+
+    {% if notice and not focus %}
+    <div class="integration-notice {{ notice_tone }}" role="{% if notice_tone == 'error' %}alert{% else %}status{% endif %}">
+        {{ icons.icon('check-circle' if notice_tone == 'success' else 'warning', 'icon-sm') }}
+        <span>{{ notice }}</span>
+    </div>
+    {% endif %}
+
+    {% if not can_manage_integrations %}
+    <div class="integration-lock-note">
+        {{ icons.icon('key', 'icon-sm') }}
+        <div>
+            <strong>Configuration is read-only on this contour</strong>
+            {% if not integration_auth_ready %}
+            <span>Enable UI authentication before allowing credential changes.</span>
+            {% elif not credential_store_ready %}
+            <span>Set <code>INTEGRATION_CREDENTIALS_KEY</code> to enable encrypted storage.</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="integration-workspace{% if focus %} has-selection{% endif %}">
+        <section class="integration-catalog" aria-labelledby="integration-catalog-title">
+            <header class="integration-catalog-heading">
+                <div>
+                    <h2 id="integration-catalog-title">Connections</h2>
+                    <p>Select an integration to inspect or configure it.</p>
+                </div>
+                <span>{{ connection_count.total }} total</span>
+            </header>
+
+            <div class="integration-list">
+                {% for connector in connectors %}
+                <article
+                    id="integration-{{ connector.key }}"
+                    class="integration-card{% if connector.configured %} is-connected{% else %} is-disconnected{% endif %}{% if focus == connector.key %} is-selected{% endif %}"
+                >
+                    <div class="integration-card-heading">
+                        <div>
+                            <span class="integration-health{% if not connector.enabled %} is-disabled{% elif connector.key != 'gitlab' and (connector.test_status == 'healthy' or (not connector.test_status and connector.registry and connector.registry.health_status == 'healthy')) %} is-healthy{% elif connector.key != 'gitlab' and (connector.test_status == 'failed' or (connector.registry and connector.registry.health_status in ['degraded', 'failed'])) %} is-failed{% endif %}">
+                                <i aria-hidden="true"></i>
+                                {% if not connector.enabled %}
+                                Disabled
+                                {% elif connector.key == 'gitlab' %}
+                                {{ connector.instances|default([])|length }} connection{% if connector.instances|default([])|length != 1 %}s{% endif %}
+                                {% elif connector.test_status == 'healthy' %}
+                                Connected
+                                {% elif connector.test_status == 'failed' %}
+                                Connection failed
+                                {% elif connector.configured %}
+                                {% if connector.registry and connector.registry.health_status in ['degraded', 'failed'] %}Degraded{% else %}Configured · not tested{% endif %}
+                                {% else %}
+                                Configuration required
+                                {% endif %}
+                            </span>
+                            <h3>{{ connector.name }}</h3>
+                            <p>{{ connector.role }}</p>
+                        </div>
+                        <span class="integration-direction-label">
+                            {% if connector.direction == 'inbound' %}Inbound{% elif connector.direction == 'outbound' %}Outbound{% else %}Bidirectional{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="integration-card-endpoints">
+                        {% if connector.key == 'gitlab' and connector.instances %}
+                        {% for instance in connector.instances %}
+                        <div class="integration-instance-summary{% if instance_focus|default('') == instance.id %} is-selected{% endif %}">
+                            <div>
+                                <span class="integration-health{% if not instance.enabled %} is-disabled{% elif instance.test_status == 'healthy' %} is-healthy{% elif instance.test_status == 'failed' %} is-failed{% endif %}">
+                                    <i aria-hidden="true"></i>{{ instance.health_label|default('credential stored' if instance.token_configured else 'token required') }}
+                                </span>
+                                <strong>{{ instance.name }}</strong>
+                                <code title="{{ instance.api_url }}">{{ instance.api_url }}</code>
+                                <small>
+                                    {% if instance.last_successful_check %}
+                                    Last success {{ instance.last_successful_check.at|localtime('%Y-%m-%d %H:%M') }}
+                                    {% elif instance.tested_at %}
+                                    Latest check {{ instance.tested_at|localtime('%Y-%m-%d %H:%M') }} · no successful check
+                                    {% elif not instance.token_configured %}
+                                    Token is not configured
+                                    {% else %}
+                                    Not tested yet
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <a
+                                href="/integrations?focus=gitlab&instance={{ instance.id }}#integration-gitlab-instance-{{ instance.id }}"
+                                id="integration-return-gitlab-instance-{{ instance.id }}"
+                                class="btn btn-ghost btn-sm"
+                                data-integration-opener
+                                data-integration-return-control="{{ 'integration-return-gitlab-instance-' ~ instance.id }}"
+                                aria-label="Configure {{ instance.name }}"
+                            >Manage</a>
+                        </div>
+                        {% endfor %}
+                        {% elif connector.endpoints %}
+                        {% for endpoint in connector.endpoints %}
+                        <div class="integration-endpoint{% if endpoint.configured %} is-ready{% endif %}">
+                            <span>
+                                <i aria-hidden="true"></i>
+                                <b class="integration-endpoint-name" title="{{ endpoint.name }}">{{ endpoint.name }}</b>
+                            </span>
+                            <span class="integration-endpoint-value">
+                                <code title="{{ endpoint.value }}" aria-label="{{ endpoint.name }} endpoint: {{ endpoint.value }}">{{ endpoint.value }}</code>
+                                <button
+                                    type="button"
+                                    class="integration-copy-endpoint"
+                                    data-copy-endpoint="{{ endpoint.value }}"
+                                    aria-label="Copy {{ endpoint.name }} endpoint"
+                                    title="Copy full endpoint"
+                                ><span aria-live="polite" data-copy-label>Copy</span></button>
+                            </span>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="integration-endpoint is-empty">
+                            <span><i aria-hidden="true"></i>No endpoint configured</span>
+                            <code>—</code>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="integration-card-footer">
+                        <div class="integration-card-meta">
+                            <span>
+                                {% if connector.key != 'gitlab' and connector.tested_at %}
+                                {{ connector.test_message }}
+                                {% else %}
+                                {{ connector.registry.health_reason if connector.registry else connector.health_label }}
+                                {% endif %}
+                            </span>
+                            {% if connector.key != 'gitlab' %}
+                            <span>
+                                Last success:
+                                {% if connector.last_successful_check %}
+                                {{ connector.last_successful_check.at|localtime('%Y-%m-%d %H:%M') }}
+                                {% else %}
+                                none recorded
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                            <span>{{ connector.credential_ref }}</span>
+                        </div>
+                        <a
+                            href="/integrations?focus={{ connector.key }}#integration-{{ connector.key }}-settings"
+                            id="integration-return-{{ connector.key }}"
+                            class="btn{% if focus == connector.key %} btn-primary{% else %} btn-outline{% endif %} integration-configure-button"
+                            data-integration-trigger="{{ connector.key }}"
+                            data-integration-opener
+                            data-integration-return-control="{{ 'integration-return-' ~ connector.key }}"
+                            {% if focus == connector.key %}
+                            aria-controls="integration-{{ connector.key }}-settings"
+                            aria-expanded="true"
+                            aria-current="true"
+                            {% else %}
+                            aria-expanded="false"
+                            {% endif %}
+                        >
+                            {{ icons.icon('gear', 'icon-sm') }}
+                            {% if focus == connector.key %}
+                            Settings open
+                            {% elif connector.key == 'gitlab' %}
+                            Add or manage
+                            {% else %}
+                            Configure
+                            {% endif %}
+                        </a>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        {% if focus %}
+        {% set return_control_id = ('integration-return-gitlab-instance-' ~ instance_focus) if focus == 'gitlab' and instance_focus else ('integration-return-' ~ focus) %}
+        <a
+            href="/integrations#{{ return_control_id }}"
+            class="integration-detail-backdrop"
+            data-integration-close
+            data-integration-return-control="{{ return_control_id }}"
+            aria-label="Close integration settings"
+            tabindex="-1"
+        ></a>
+        {% for connector in connectors %}
+            {% if focus == connector.key %}
+                {% include 'partials/integration_settings_panel.html' %}
+            {% endif %}
+        {% endfor %}
+        {% else %}
+        <aside class="integration-detail-empty" aria-label="Integration details">
+            <div class="integration-detail-empty-icon">{{ icons.icon('gear') }}</div>
+            <h2>Choose a connection</h2>
+            <p>Configuration, credential status, and connection checks will appear here.</p>
+        </aside>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/integrations.js?v=20260724-exact-focus-return-1" defer></script>
+{% endblock %}

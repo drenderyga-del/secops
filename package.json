@@ -1,0 +1,19 @@
+{
+  "name": "scanops-browser-qa",
+  "private": true,
+  "scripts": {
+    "qa:release-gate": "./scripts/run_seeded_browser_gate.sh",
+    "qa:e2e": "./scripts/run_browser_qa.sh",
+    "qa:e2e:smoke": "QA_ROUTE_TAGS=smoke playwright test qa/e2e/exploratory.spec.ts",
+    "qa:e2e:interactions": "QA_MAX_SAFE_LINKS=${QA_MAX_SAFE_LINKS:-4} playwright test qa/e2e/interactions.spec.ts --project=desktop-1440",
+    "qa:e2e:list": "playwright test --list --reporter=line",
+    "qa:e2e:typecheck": "tsc --project tsconfig.qa.json --noEmit",
+    "qa:e2e:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2"
+  }
+}

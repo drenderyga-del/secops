@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ScanOps · GitLab Config Security Report</title>
+  <style>
+    body {
+      margin: 0;
+      color: #f8f4ff;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(160deg, #0a061d, #120b2f 50%, #130b31);
+    }
+    .container { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    .card { background: rgba(45, 29, 105, 0.65); border: 1px solid #4a37a0; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid rgba(174, 150, 255, 0.28); vertical-align: top; }
+    th { color: #c8bbff; font-size: 12px; text-transform: uppercase; }
+    .badge { display: inline-block; padding: 2px 8px; border: 1px solid transparent; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .critical { background: #8f1237; color: #fff; }
+    .high { background: #9d2b0b; color: #fff; }
+    .medium { background: #f6c344; color: #241800; }
+    .low { background: #3548b8; color: #fff; }
+    .info { background: #16613d; color: #fff; }
+    .small { color: #cebfff; font-size: 12px; }
+    a { color: #a78bfa; }
+    @media print {
+      body { color: #17111f; background: #fff; }
+      .container { max-width: none; padding: 0; }
+      .card { background: #fff; border-color: #d8d1e8; box-shadow: none; }
+      th, td { border-bottom-color: #d8d1e8; }
+      th, .small { color: #4f465c; }
+      a { color: #3d257f; }
+      .badge { background: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .critical { color: #75102e; border-color: #75102e; }
+      .high { color: #7a2108; border-color: #7a2108; }
+      .medium { color: #5d4000; border-color: #8f6500; }
+      .low { color: #293a98; border-color: #293a98; }
+      .info { color: #105032; border-color: #105032; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="card">
+      <h1>ScanOps &mdash; GitLab Config Security Report</h1>
+      <p class="small">Generated at: {{ report.metadata.generated_at }}</p>
+      <p class="small">GitLab: {{ report.metadata.gitlab_url }} / Scope: {{ report.metadata.group_path }}</p>
+    </section>
+
+    <section class="card">
+      <h2>Summary</h2>
+      <table>
+        <tbody>
+          <tr><td>Total projects</td><td>{{ report.summary.projects_total }}</td></tr>
+          <tr><td>Scanned projects</td><td>{{ report.summary.projects_scanned }}</td></tr>
+          <tr><td>Projects with findings</td><td>{{ report.summary.projects_with_findings }}</td></tr>
+          <tr><td>Total findings</td><td>{{ report.summary.findings_total }}</td></tr>
+          <tr><td>Total warnings</td><td>{{ report.summary.warnings_total }}</td></tr>
+        </tbody>
+      </table>
+      <p>
+        <span class="badge critical">Critical {{ report.summary.severity.critical }}</span>
+        <span class="badge high">High {{ report.summary.severity.high }}</span>
+        <span class="badge medium">Medium {{ report.summary.severity.medium }}</span>
+        <span class="badge low">Low {{ report.summary.severity.low }}</span>
+        <span class="badge info">Info {{ report.summary.severity.info }}</span>
+      </p>
+    </section>
+
+    {% for project in report.projects %}
+      {% if project.findings %}
+      <section class="card">
+        <h3>
+          {% if project.project_url %}
+            <a href="{{ project.project_url }}" target="_blank" rel="noreferrer">{{ project.project_path }}</a>
+          {% else %}
+            {{ project.project_path }}
+          {% endif %}
+        </h3>
+        <p class="small">Findings: {{ project.findings | length }} | Warnings: {{ project.warnings | length }}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Code</th>
+              <th>Title</th>
+              <th>Description</th>
+              <th>Recommendation</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in project.findings %}
+            <tr>
+              <td><span class="badge {{ item.severity }}">{{ item.severity }}</span></td>
+              <td>{{ item.code }}</td>
+              <td>{{ item.title }}</td>
+              <td>{{ item.description }}</td>
+              <td>{{ item.recommendation }}</td>
+              <td class="small">{{ item.evidence }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+      {% endif %}
+    {% endfor %}
+  </div>
+</body>
+</html>

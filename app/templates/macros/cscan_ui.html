@@ -1,0 +1,19 @@
+{% macro severity_badge(sev) %}
+{% if sev in ['critical', 'high'] %}
+<span class="status-badge error">{{ sev }}</span>
+{% elif sev == 'medium' %}
+<span class="status-badge warning">{{ sev }}</span>
+{% else %}
+<span class="status-badge unknown">{{ sev }}</span>
+{% endif %}
+{% endmacro %}
+
+{% macro severity_pills(summary) %}
+<div class="cscan-sev-pills cscan-sev-pills--mini">
+    {% if summary.critical %}<span class="pill pill-sev pill-sev--critical">C:{{ summary.critical }}</span>{% endif %}
+    {% if summary.high %}<span class="pill pill-sev pill-sev--high">H:{{ summary.high }}</span>{% endif %}
+    {% if summary.medium %}<span class="pill pill-sev pill-sev--medium">M:{{ summary.medium }}</span>{% endif %}
+    {% if summary.low %}<span class="pill pill-sev pill-sev--low">L:{{ summary.low }}</span>{% endif %}
+    {% if summary.info %}<span class="pill pill-sev pill-sev--info">I:{{ summary.info }}</span>{% endif %}
+</div>
+{% endmacro %}

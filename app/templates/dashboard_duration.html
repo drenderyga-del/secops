@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Pipeline Duration - DevSecOps Platform{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="page-header">
+        <div>
+            <h1>Pipeline Duration</h1>
+            <p>Average security pipeline execution time over time. Use it to track whether pipeline optimization actually reduces runtime.</p>
+        </div>
+    </div>
+
+    <section id="metrics" class="page-section stats-grid duration-grid">
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('clock') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ pipeline_duration.avg_label }}</strong>
+                <p>Avg pipeline</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('layers') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ pipeline_duration.median_label }}</strong>
+                <p>Median pipeline</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('warning') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ pipeline_duration.p95_label }}</strong>
+                <p>P95 pipeline</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('gear') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ job_duration.avg_label }}</strong>
+                <p>Avg job{% if selected_tool != 'all' %} · {{ selected_tool|upper }}{% endif %}</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="trend" class="page-section chart-container duration-chart-container">
+        <div class="chart-header">
+            <div class="chart-title">
+                <h2>Average Duration Trend</h2>
+                <p class="chart-subtitle">Pipeline average and selected job/tool average in minutes</p>
+            </div>
+            <form class="chart-range-form" method="get">
+                <label for="duration-timeframe">Timeframe</label>
+                <div class="select">
+                    <select id="duration-timeframe" name="timeframe" onchange="this.form.submit()">
+                        {% for option in chart_timeframes %}
+                            <option value="{{ option.value }}" {% if option.value == selected_timeframe %}selected{% endif %}>
+                                {{ option.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <label class="visually-hidden" for="duration-tool">Security tool</label>
+                <div class="select">
+                    <select id="duration-tool" name="tool" onchange="this.form.submit()">
+                        {% for option in chart_tools %}
+                            <option value="{{ option.value }}" {% if option.value == selected_tool %}selected{% endif %}>
+                                {{ option.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+        <canvas id="durationChart" data-chart='{{ chart_data | tojson }}'></canvas>
+    </section>
+
+    <section id="breakdown" class="page-section chart-container duration-tools-container">
+        <div class="chart-header">
+            <div class="chart-title">
+                <h2>Job Duration By Tool</h2>
+                <p class="chart-subtitle">Average job execution for the selected period</p>
+            </div>
+        </div>
+        <div class="duration-breakdown">
+            {% for item in job_duration_breakdown %}
+                <a class="duration-chip duration-chip-link{% if selected_tool == item.value %} active{% endif %}" href="/dashboard/duration?timeframe={{ selected_timeframe }}&tool={{ item.value }}">
+                    <span>{{ item.label }}</span>
+                    <strong>{{ item.summary.avg_label }}</strong>
+                    <small>{{ item.summary.count }} jobs</small>
+                </a>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

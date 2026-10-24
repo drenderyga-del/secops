@@ -1,0 +1,255 @@
+variables:
+  KICS_SCAN_TOOL: kics
+  KICS_REPORT_FORMAT: json
+  KICS_REPORT_FOLDER: ${APPSECHUB_RAW_REPORTS_FOLDER}/${KICS_SCAN_TOOL}
+  KICS_REPORT_FILE: ${KICS_REPORT_FOLDER}/${APPSECHUB_OUTPUT_FILE}.${KICS_REPORT_FORMAT}
+
+kics_scan:
+  stage: iac-scan
+  rules:
+    - if: ($APPSECHUB_KICS_RAISE_FAILURE != null && $APPSECHUB_KICS_RAISE_FAILURE !~ /^(false|False|FALSE)$/) || ($APPSECHUB_RAISE_FAILURE != null && $APPSECHUB_RAISE_FAILURE !~ /^(false|False|FALSE)$/)
+      when: always
+      allow_failure: false
+    - when: always
+      allow_failure: true
+  needs:
+    - job: get_code_and_cloc_it
+    - job: prepare_values
+    - job: mr_label_checker
+      optional: true
+  image:
+    name: $APPSECHUB_IMAGE_KICS
+    entrypoint: [""]
+  script:
+    - |
+      mkdir -p "${KICS_REPORT_FOLDER}"
+      echo "Kics is scanning"
+      CMD="kics scan \
+      -p \"${CI_PROJECT_DIR}/${APPSECHUB_CODE_SCAN_FOLDER}\" \
+      --ci \
+      --ignore-on-exit results \
+      --disable-secrets \
+      --disable-full-descriptions \
+      --exclude-type OpenAPI \
+      --report-formats \"${KICS_REPORT_FORMAT}\" \
+      -o \"${CI_PROJECT_DIR}/${KICS_REPORT_FOLDER}\" \
+      --output-name \"${APPSECHUB_OUTPUT_FILE}.${KICS_REPORT_FORMAT}\""
+      case "$APPSECHUB_DEBUG_MODE" in
+        ""|"false"|"False"|"FALSE")
+          ;;
+        *)
+          echo -e "\e[45mCommand CMD:\e[0m"
+          echo "$CMD"
+          echo -e "\e[45mCommand ls -al KICS_REPORT_FOLDER:\e[0m"
+          ls -la ${KICS_REPORT_FOLDER}
+          ;;
+      esac
+      sh -c "$CMD"
+      echo "KICS_SCANNER_WORKDIR=${CI_PROJECT_DIR}" >> ${CI_PROJECT_DIR}/${APPSECHUB_ENV_FILE}
+  artifacts:
+    paths:
+      - ${KICS_REPORT_FILE}
+    reports:
+      dotenv: ${APPSECHUB_ENV_FILE}
+    expire_in: 7 days
+
+kics_convert_results:
+  extends:
+    - .convert_results
+  rules:
+    - if: $APPSECHUB_DISABLE_PUBLISH && $APPSECHUB_DISABLE_PUBLISH !~ /^(false|False|FALSE)$/
+      when: never
+    - if: ($APPSECHUB_KICS_RAISE_FAILURE != null && $APPSECHUB_KICS_RAISE_FAILURE !~ /^(false|False|FALSE)$/) || ($APPSECHUB_RAISE_FAILURE != null && $APPSECHUB_RAISE_FAILURE !~ /^(false|False|FALSE)$/)
+      when: always
+      allow_failure: false
+    - when: always
+      allow_failure: true
+  needs:
+    - job: get_code_and_cloc_it
+    - job: kics_scan
+    - job: prepare_values
+    - job: mr_label_checker
+      optional: true
+  variables:
+    SCAN_FORMAT: ${KICS_SCAN_TOOL}
+    SCAN_TOOL: ${KICS_SCAN_TOOL}
+    CONVERT_TYPE: CODEBASE
+    REPORT_FILE: ${KICS_REPORT_FILE}
+    SCANNER_TEMP_DIR: ${APPSECHUB_CODE_SCAN_FOLDER}
+    SCANNER_WORKDIR: ${KICS_SCANNER_WORKDIR}
+    CONVERTER_WORKDIR: ${CI_PROJECT_DIR}
+
+
+kics_push_results:
+  extends:
+    - .push_results
+  rules:
+    - if: $APPSECHUB_DISABLE_PUBLISH && $APPSECHUB_DISABLE_PUBLISH !~ /^(false|False|FALSE)$/
+      when: never
+    - if: ($APPSECHUB_KICS_RAISE_FAILURE != null && $APPSECHUB_KICS_RAISE_FAILURE !~ /^(false|False|FALSE)$/) || ($APPSECHUB_RAISE_FAILURE != null && $APPSECHUB_RAISE_FAILURE !~ /^(false|False|FALSE)$/)
+      when: always
+      allow_failure: false
+    - when: always
+      allow_failure: true
+  needs:
+    - job: kics_convert_results
+    - job: prepare_values
+    - job: mr_label_checker
+      optional: true
+  variables:
+    SCAN_TOOL: ${KICS_SCAN_TOOL}
+----------------
+variables:
+  CHECKOV_SCAN_TOOL: checkov
+  CHECKOV_REPORT_FORMAT: json
+  CHECKOV_REPORT_FOLDER: ${APPSECHUB_RAW_REPORTS_FOLDER}/${CHECKOV_SCAN_TOOL}
+  CHECKOV_REPORT_FILE: ${CHECKOV_REPORT_FOLDER}/${APPSECHUB_OUTPUT_FILE}.${CHECKOV_REPORT_FORMAT}
+
+checkov_scan:
+  stage: iac-scan
+  rules:
+    - if: ($APPSECHUB_CHECKOV_RAISE_FAILURE != null && $APPSECHUB_CHECKOV_RAISE_FAILURE !~ /^(false|False|FALSE)$/) || ($APPSECHUB_RAISE_FAILURE != null && $APPSECHUB_RAISE_FAILURE !~ /^(false|False|FALSE)$/)
+      when: always
+      allow_failure: false
+    - when: always
+      allow_failure: true
+  needs:
+    - job: get_code_and_cloc_it
+    - job: prepare_values
+    - job: mr_label_checker
+      optional: true
+  image:
+    name: $APPSECHUB_IMAGE_CHECKOV
+    entrypoint: [""]
+  script:
+    - |
+      mkdir -p "${CHECKOV_REPORT_FOLDER}"
+      echo "Checkov is scanning"
+      CMD="checkov \
+      --skip-download \
+      --directory \"${APPSECHUB_CODE_SCAN_FOLDER}\" \
+      --output \"${CHECKOV_REPORT_FORMAT}\" \
+      --soft-fail > \"${CHECKOV_REPORT_FILE}\""
+
+      sh -c "$CMD"
+
+      case "$APPSECHUB_DEBUG_MODE" in
+        ""|"false"|"False"|"FALSE")
+          ;;
+        *)
+          echo -e "\e[45mCommand CMD:\e[0m"
+          echo "$CMD"
+          echo -e "\e[45mCommand ls -al CHECKOV_REPORT_FOLDER:\e[0m"
+          ls -la ${CHECKOV_REPORT_FOLDER}
+          ;;
+      esac
+
+      echo "CHECKOV_SCANNER_WORKDIR=${CI_PROJECT_DIR}" >> ${CI_PROJECT_DIR}/${APPSECHUB_ENV_FILE}
+  artifacts:
+    paths:
+      - ${CHECKOV_REPORT_FILE}
+    reports:
+      dotenv: ${APPSECHUB_ENV_FILE}
+    expire_in: 7 days
+
+checkov_convert_results:
+  extends:
+    - .convert_results
+  rules:
+    - if: $APPSECHUB_DISABLE_PUBLISH && $APPSECHUB_DISABLE_PUBLISH !~ /^(false|False|FALSE)$/
+      when: never
+    - if: ($APPSECHUB_CHECKOV_RAISE_FAILURE != null && $APPSECHUB_CHECKOV_RAISE_FAILURE !~ /^(false|False|FALSE)$/) || ($APPSECHUB_RAISE_FAILURE != null && $APPSECHUB_RAISE_FAILURE !~ /^(false|False|FALSE)$/)
+      when: always
+      allow_failure: false
+    - when: always
+      allow_failure: true
+  needs:
+    - job: checkov_scan
+    - job: prepare_values
+    - job: get_code_and_cloc_it
+    - job: mr_label_checker
+      optional: true
+  variables:
+    SCAN_FORMAT: ${CHECKOV_SCAN_TOOL}
+    SCAN_TOOL: ${CHECKOV_SCAN_TOOL}
+    CONVERT_TYPE: CODEBASE
+    REPORT_FILE: ${CHECKOV_REPORT_FILE}
+    SCANNER_TEMP_DIR: ${APPSECHUB_CODE_SCAN_FOLDER}
+    SCANNER_WORKDIR: ${CHECKOV_SCANNER_WORKDIR}
+
+
+checkov_push_results:
+  extends:
+    - .push_results
+  rules:
+    - if: $APPSECHUB_DISABLE_PUBLISH && $APPSECHUB_DISABLE_PUBLISH !~ /^(false|False|FALSE)$/
+      when: never
+    - if: ($APPSECHUB_CHECKOV_RAISE_FAILURE != null && $APPSECHUB_CHECKOV_RAISE_FAILURE !~ /^(false|False|FALSE)$/) || ($APPSECHUB_RAISE_FAILURE != null && $APPSECHUB_RAISE_FAILURE !~ /^(false|False|FALSE)$/)
+      when: always
+      allow_failure: false
+    - when: always
+      allow_failure: true
+  needs:
+    - job: checkov_convert_results
+    - job: prepare_values
+    - job: mr_label_checker
+      optional: true
+  variables:
+    SCAN_TOOL: ${CHECKOV_SCAN_TOOL}
+-----------------
+iac_scan:
+  stage: appsec_scan
+  image:
+    name: $CHECKOV_IMAGE
+    entrypoint: [""]
+  allow_failure: true
+  tags:
+    - appsec
+  script:
+    - |
+      checkov --directory . \
+        --framework cloudformation \
+        --framework terraform \
+        --framework kubernetes \
+        --framework dockerfile \
+        --framework helm \
+        --framework ansible \
+        --framework gitlab_ci \
+        --output sarif \
+        --quiet \
+        --soft-fail \
+        > "${CI_PROJECT_NAME}.sarif"
+
+      echo "✅ SARIF отчет создан: ${CI_PROJECT_NAME}.sarif"
+      echo "📊 Размер файла: $(wc -c < "${CI_PROJECT_NAME}.sarif") байт"
+  artifacts:
+    when: always
+    paths:
+      - "${CI_PROJECT_NAME}.sarif"
+    expire_in: 2 days
+  rules:
+    - if: $DISABLE_CHECKOV_SCAN == null
+      when: always
+    - when: never
+
+asoc_checkov:
+  stage: asoc_upload
+  tags:
+    - appsec
+  allow_failure: yes
+  image: $ASOC_IMAGE
+  dependencies:
+    - iac_scan
+  script:
+    - export NO_PROXY=''
+    - export HTTPS_PROXY=''
+    - export HTTP_PROXY=''
+    - export https_proxy=''
+    - export http_proxy=''
+    - export no_proxy=''
+    - |
+      python /home/devsec/app/hexway.py appscreener
+  rules:
+    - if: '$HEXWAY_TOKEN && $HEXWAY_PRODUCT_ID && $DISABLE_CHECKOV_SCAN == null'
+      when: always
+    - when: never

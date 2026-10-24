@@ -1,0 +1,55 @@
+# Source-control and CI metadata belong to the destination internal repository.
+.git
+.git/
+.gitlab-ci.yml
+.scanops-export-manifest
+docker-compose.yml
+AGENTS.md
+**/AGENTS.md
+.DS_Store
+**/.DS_Store
+
+# Local state and credentials never leave the developer workstation.
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+*.py[cod]
+
+# Development, test and preview material is retained in GitLab but is not part
+# of the deployable application copy.
+tests/
+docs/
+design-previews/
+Dockerfile.local
+CHANGELOG.md
+CODEX_CONTEXT.md
+.codex/
+.claude/
+.impeccable/
+
+# Local frontend builds, browser output and generated QA artifacts are ignored
+# by the source checkout and must never become source-owned release files.
+node_modules
+frontend/node_modules
+app/static/next
+playwright-report
+test-results
+.playwright-cli
+output/playwright
+qa/artifacts

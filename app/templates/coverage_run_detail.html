@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Coverage run #{{ run.id }} · ScanOps{% endblock %}
+
+{% block content %}
+<div class="coverage-run-detail-page">
+    <div class="page-header">
+        <div>
+            <h1>Coverage run #{{ run.id }}</h1>
+            <p>Execution evidence for one historical Coverage scan. Repository state is shown separately on Current coverage.</p>
+        </div>
+        <nav class="module-tabs" aria-label="Coverage views">
+            <a class="module-tab" href="{{ coverage_url }}">{{ icons.icon('chart', 'icon-sm') }} Current coverage</a>
+            <a class="module-tab active" href="{{ coverage_runs_url }}" aria-current="page">{{ icons.icon('clock', 'icon-sm') }} Run history</a>
+        </nav>
+    </div>
+
+    <section class="page-section coverage-run-summary" aria-labelledby="coverage-run-summary-title">
+        <header class="coverage-run-summary-header">
+            <div>
+                <h2 id="coverage-run-summary-title">Run summary</h2>
+                <p>Created {{ run.created_at|localtime('%Y-%m-%d %H:%M:%S') if run.created_at else '—' }}</p>
+            </div>
+            <span class="status-badge {{ run.status_class }}">{{ run.status_label }}</span>
+        </header>
+        <dl class="coverage-run-detail-facts">
+            <div><dt>Products</dt><dd>{{ run.selected_products or 'All monitored' }}</dd></div>
+            <div><dt>Repositories</dt><dd>{{ run.processed_repositories }} / {{ run.total_repositories }}</dd></div>
+            <div><dt>Started</dt><dd>{{ run.started_at|localtime('%Y-%m-%d %H:%M:%S') if run.started_at else 'Not started' }}</dd></div>
+            <div><dt>Finished</dt><dd>{{ run.finished_at|localtime('%Y-%m-%d %H:%M:%S') if run.finished_at else 'Not finished' }}</dd></div>
+            <div><dt>Duration</dt><dd>{{ run.duration or '—' }}</dd></div>
+        </dl>
+        {% if run.status in ['queued', 'running'] %}
+        <form method="post" action="/audit/scan-cancel" class="coverage-run-cancel">
+            <input type="hidden" name="run_id" value="{{ run.id }}">
+            <button type="submit" class="btn btn-outline btn-sm">Cancel run</button>
+        </form>
+        {% endif %}
+    </section>
+
+    <section class="page-section coverage-run-diagnostics" aria-labelledby="coverage-run-diagnostics-title">
+        <header class="coverage-run-diagnostics-header">
+            <div>
+                <h2 id="coverage-run-diagnostics-title">Diagnostic</h2>
+                <p>{{ run.diagnostic_excerpt or 'No diagnostic was recorded for this run.' }}</p>
+            </div>
+            {% if run.diagnostic %}
+            <div class="coverage-copy-control">
+                <button
+                    type="button"
+                    class="btn btn-ghost btn-sm"
+                    data-copy-target="coverage-run-diagnostic"
+                    data-copy-feedback="coverage-run-copy-feedback"
+                >Copy diagnostic</button>
+                <span id="coverage-run-copy-feedback" class="coverage-copy-feedback" aria-live="polite"></span>
+            </div>
+            {% endif %}
+        </header>
+        {% if run.diagnostic %}
+        <details class="coverage-diagnostic-details">
+            <summary>Expand full diagnostic</summary>
+            <pre><code id="coverage-run-diagnostic">{{ run.diagnostic }}</code></pre>
+        </details>
+        {% else %}
+        <div class="empty-state coverage-diagnostic-empty">
+            <p>This run did not record a diagnostic message.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ coverage_runs_url }}">Back to run history</a>
+        <a class="btn btn-ghost" href="{{ coverage_url }}">Open Current coverage</a>
+    </div>
+</div>
+{% endblock %}

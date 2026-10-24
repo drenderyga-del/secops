@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/cscan_harbor.html' as harbor %}
+
+{% block title %}{{ product_identity_title }} · Product workbench · ScanOps{% endblock %}
+
+{% block content %}
+<div class="repositories-page product-360-page">
+    <div class="page-header">
+        <div>
+            <span class="page-eyebrow">PRODUCT WORKBENCH</span>
+            <h1>{{ product_identity_title }}</h1>
+            <p>{% if product_identity_bi_id %}BI_{{ product_identity_bi_id }} · {% endif %}Canonical ASOC product identity with linked ScanOps group evidence.</p>
+        </div>
+        <div class="page-actions">
+            <a href="/pipelines?product={{ product.id }}" class="btn btn-primary">{{ icons.icon('layers', 'icon-sm') }} View product pipelines</a>
+            <a href="{{ product_coverage_url(product.id) }}" class="btn btn-secondary">{{ icons.icon('branch', 'icon-sm') }} View coverage</a>
+            <a href="/config-scan/products/{{ product.id }}" class="btn btn-secondary">{{ icons.icon('gear', 'icon-sm') }} Open Config Guard evidence</a>
+        </div>
+    </div>
+
+    <section class="product-identity-panel" aria-label="Canonical product and monitored group">
+        <div class="product-identity-main">
+            <span>CANONICAL PRODUCT · ASOC</span>
+            <strong>{% if product_identity_bi_id %}BI_{{ product_identity_bi_id }}{% else %}ASOC product card{% endif %}</strong>
+            <small>The product name above is canonical; this ASOC card is its reporting identity.</small>
+            {% if product_identity_asoc_url %}<a href="{{ product_identity_asoc_url }}" target="_blank" rel="noopener noreferrer">Open in ASOC ↗</a>{% endif %}
+        </div>
+        <div class="product-identity-target">
+            <span>MONITORED PRODUCT GROUP · GITLAB</span>
+            <strong>{{ product.name }}</strong>
+            <small>{{ product_group_path or 'Group path unavailable' }}</small>
+            {% if product_group_url %}<a href="{{ product_group_url }}" target="_blank" rel="noopener noreferrer">GitLab product group ↗</a>{% endif %}
+        </div>
+    </section>
+
+    <section id="metrics" class="page-section stats-grid duration-grid">
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('clock') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ pipeline_duration.avg_label }}</strong>
+                <p>Avg pipeline · 30d</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('layers') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ pipeline_duration.latest_label }}</strong>
+                <p>Last pipeline</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('gear') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ job_duration.avg_label }}</strong>
+                <p>Avg job · 30d</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">{{ icons.icon('check-circle') }}</div>
+            <div class="stat-content">
+                <strong class="stat-value">{{ pipeline_duration.count }}</strong>
+                <p>Pipelines measured</p>
+            </div>
+        </div>
+    </section>
+
+    {% set product_asoc_cards = asoc_cards|default([], true) %}
+    {% set product_asoc_sync = asoc_sync|default({}, true) %}
+    <section id="asoc" class="page-section product-asoc-panel" aria-labelledby="product-asoc-title">
+        <div class="chart-header">
+            <div>
+                <span class="page-eyebrow">ASOC DELIVERY</span>
+                <h2 id="product-asoc-title">ASOC synchronization and mapping</h2>
+                <p class="chart-subtitle">
+                    {% if product_asoc_sync.state == 'stale' %}
+                        ASOC card data is stale; refresh the ASOC report before judging delivery.
+                    {% elif product_asoc_sync.state == 'not_configured' %}
+                        ASOC is not configured, so card synchronization cannot be verified.
+                    {% elif product_asoc_sync.state == 'not_synced' %}
+                        ASOC cards have not been synchronized yet.
+                    {% else %}
+                        Product pipelines and ASOC delivery evidence are shown as separate signals.
+                    {% endif %}
+                </p>
+            </div>
+            <div class="page-actions">
+                <a href="/targets?level=product&amp;product={{ product.id }}" class="btn btn-secondary">Back to Products</a>
+                <a href="/pipelines?product={{ product.id }}" class="btn btn-ghost">View pipelines</a>
+            </div>
+        </div>
+        <div class="product-asoc-summary">
+            <div><span>SYNC STATE</span><strong>{{ product_asoc_sync.state|default('unknown')|replace('_', ' ')|title }}</strong></div>
+            <div><span>MAPPED ASOC CARDS</span><strong>{{ product_asoc_cards|length }}</strong></div>
+            <div><span>LAST CARD SYNC</span><strong>{% if product_asoc_sync.last_synced %}{{ product_asoc_sync.last_synced|localtime('%Y-%m-%d %H:%M') }}{% else %}Not recorded{% endif %}</strong></div>
+        </div>
+        {% if product_asoc_cards %}
+        <div class="product-asoc-cards">
+            {% for card in product_asoc_cards %}
+            {% set repository_mapping_state = card.repository_mapping_state|default('mapped', true) %}
+            <div class="product-asoc-card">
+                <div class="product-asoc-card-header">
+                    <div class="product-asoc-card-title">
+                        {% if card.asoc_url %}<a href="{{ card.asoc_url }}" target="_blank" rel="noopener noreferrer">{{ card.title }} ↗</a>{% else %}<strong>{{ card.title }}</strong>{% endif %}
+                        <small>{% if card.bi_id %}BI_{{ card.bi_id }}{% else %}No BI_ID{% endif %} · {{ card.slug or 'No ASOC slug' }}</small>
+                    </div>
+                    <span class="status-badge {% if repository_mapping_state == 'mapped' %}success{% elif repository_mapping_state == 'partial' %}warning{% else %}error{% endif %}">{{ repository_mapping_state|replace('_', ' ')|title }}{% if card.matched_by %} · {{ card.matched_by|replace('_', ' ') }}{% endif %}</span>
+                </div>
+                <dl class="product-asoc-lifecycle">
+                    <div><dt>Audience</dt><dd><span class="product-scope product-scope-{{ card.scope }}">{{ card.scope|replace('_', ' ')|title }}</span></dd></div>
+                    <div><dt>Connected (ASOC card created)</dt><dd>{% if card.asoc_created %}{{ card.asoc_created|localtime('%Y-%m-%d') }}{% else %}Not recorded{% endif %}</dd></div>
+                    <div><dt>Linked in ScanOps</dt><dd>{% if card.first_connected_at %}{{ card.first_connected_at|localtime('%Y-%m-%d') }}{% elif card.connected_before_tracking or card.monitor_products %}Unknown · linked before date tracking{% else %}Not yet{% endif %}</dd></div>
+                </dl>
+                {% if card.target_groups %}
+                <div class="product-asoc-groups">
+                    <span>LINKED GITLAB PRODUCT GROUPS · {{ card.target_groups|length }}</span>
+                    {% for target in card.target_groups %}
+                    <div class="product-asoc-group">
+                        <div><strong>{{ target.name }}</strong><small>{{ target.path }} · {{ target.repositories }} monitored repositories</small></div>
+                        {% if target.url %}<a href="{{ target.url }}" target="_blank" rel="noopener noreferrer">Open group ↗</a>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if card.description_links %}
+                <div class="product-asoc-references">
+                    {% for link in card.description_links %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ 'GitLab source' if link.kind == 'gitlab' else 'Product reference' }} ↗</a>{% endfor %}
+                </div>
+                {% endif %}
+                {% if card.mapping_detail %}<p class="product-asoc-mapping-detail">{{ card.mapping_detail }}</p>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% elif product_asoc_sync.total_cards %}
+        <p class="no-data">No synchronized ASOC card matches this Product target. The report keeps it separate until an unambiguous link is available.</p>
+        {% else %}
+        <p class="no-data">No ASOC card data is available yet.</p>
+        {% endif %}
+    </section>
+
+    <section id="repositories" class="page-section table-container" tabindex="0" aria-label="Product repositories">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Repository</th>
+                    <th>Control coverage</th>
+                    <th>Status</th>
+                    <th>Success Rate</th>
+                    <th>Avg Pipeline</th>
+                    <th>Last Pipeline</th>
+                    <th>Avg Job</th>
+                    <th>Recent Jobs</th>
+                    <th>Last Report</th>
+                    <th>Config findings</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for repo_data in repositories %}
+                <tr>
+                    <td>
+                        <div class="repo-info">
+                            <strong>{{ repo_data.repository.path }}</strong>
+                        </div>
+                    </td>
+                    <td>
+                        {% set controls = repo_data.control_coverage %}
+                        {% if controls.expected %}
+                            <div class="pipeline-health">
+                                <span class="pill {% if controls.missing %}failed{% else %}success{% endif %}">{{ controls.configured }} / {{ controls.expected }}</span>
+                                {% if controls.missing %}<span class="pipeline-rate">{{ controls.missing }} missing</span>{% else %}<span class="pipeline-rate">configured</span>{% endif %}
+                            </div>
+                        {% else %}
+                            <span class="no-data">No control policy</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if repo_data.repository.overall_status.value == 'success' %}
+                            <span class="status-badge success">{{ icons.icon('check-circle', 'icon-sm') }}&nbsp;Success</span>
+                        {% elif repo_data.repository.overall_status.value == 'failed' %}
+                            <span class="status-badge error">{{ icons.icon('x-circle', 'icon-sm') }}&nbsp;Failed</span>
+                        {% else %}
+                            <span class="status-badge unknown">{{ icons.icon('question-circle', 'icon-sm') }}&nbsp;Unknown</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="success-rate">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ repo_data.stats.success_rate }}%"></div>
+                            </div>
+                            <span class="rate-text">{{ repo_data.stats.success_rate }}%</span>
+                        </div>
+                    </td>
+                    <td><span class="timestamp">{{ repo_data.pipeline_duration.avg_label }}</span></td>
+                    <td><span class="timestamp">{{ repo_data.pipeline_duration.latest_label }}</span></td>
+                    <td><span class="timestamp">{{ repo_data.job_duration.avg_label }}</span></td>
+                    <td>
+                        <div class="job-statuses">
+                            {% for job in repo_data.latest_jobs %}
+                                {% set status = job.job_status.label if job.job_status else 'unknown' %}
+                                {% if status == 'success' %}
+                                    <span class="job-status success" title="{{ job.job_name }}">{{ icons.icon('check', 'icon-sm') }}</span>
+                                {% elif status == 'failed' %}
+                                    <span class="job-status error" title="{{ job.job_name }}">{{ icons.icon('x', 'icon-sm') }}</span>
+                                {% else %}
+                                    <span class="job-status unknown" title="{{ job.job_name }}">{{ icons.icon('question-circle', 'icon-sm') }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if repo_data.repository.last_report_at %}
+                            <span class="timestamp">{{ repo_data.repository.last_report_at|localtime('%Y-%m-%d %H:%M') }}</span>
+                        {% else %}
+                            <span class="no-data">Never</span>
+                        {% endif %}
+                    </td>
+                    <td class="cscan-config-col">
+                        {% if not config_scan_run_id %}
+                            <span class="no-data">No scan yet</span>
+                        {% elif repo_data.config_scan %}
+                            <div class="repo-config-scan-cell">
+                                {{ harbor.cscan_harbor_severity(repo_data.config_scan.summary) }}
+                                <a href="/config-scan/runs/{{ repo_data.config_scan.run_id }}/findings?project={{ repo_data.repository.path | urlencode }}" class="btn btn-outline btn-sm cscan-findings-page-link">Findings</a>
+                            </div>
+                        {% else %}
+                            <span class="no-data" title="No findings for this repo in the latest successful config scan">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <form method="post" action="/config-scan/products/{{ product.id }}/repositories/{{ repo_data.repository.id }}/scan" style="margin: 0;">
+                                <button type="submit" class="btn btn-outline btn-sm" title="Scan CI/CD configuration for this repository only">{{ icons.icon('rotate', 'icon-sm') }} Config scan</button>
+                            </form>
+                            <a href="/repos/{{ repo_data.repository.id }}/jobs" class="btn btn-ghost btn-sm">
+                                {{ icons.icon('layers', 'icon-sm') }}
+                                <span>View job logs</span>
+                            </a>
+                            <a href="{{ repository_target_url(repo_data.repository.id) }}" class="btn btn-ghost btn-sm">
+                                {{ icons.icon('arrow-up-right', 'icon-sm') }}
+                                <span>Open Target 360</span>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    {% if not repositories %}
+    <div class="empty-state">
+        <div class="empty-icon">{{ icons.icon('folder', 'icon-lg') }}</div>
+        <h2>No repository targets yet</h2>
+        <p>No repositories have been reported for this product target.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

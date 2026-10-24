@@ -1,0 +1,112 @@
+# Environment variables
+.env
+.env.local
+.env.production
+.env.*
+!.env.example
+*.local.*
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+.fleet/
+.zed/
+.cursor/
+*.swp
+*.swo
+*.orig
+*.rej
+
+# OS
+.DS_Store
+Thumbs.db
+._*
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Local-only automation/debug artifacts
+.pytest_cache/
+.cache/
+.coverage
+coverage.xml
+htmlcov/
+tmp/
+node_modules/
+app/static/next/
+playwright-report/
+test-results/
+.playwright-cli/
+output/playwright/
+qa/artifacts/
+qa/e2e/manifests/*.local.json
+docs/superpowers/
+CODEX_CONTEXT.md
+.agents/
+.repowise/
+.codex/
+.codex*
+codex-*
+.claude/
+
+# Local tools
+vampy-cli-darwin-arm64
+
+# Local trust, keys, data exports, and private deployment artifacts
+cert/
+certs/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.dump
+*.sql.gz
+*.db
+*.sqlite
+*.sqlite3
+.env*
+!.env.example
+
+.impeccable/
+docs/superpowers/

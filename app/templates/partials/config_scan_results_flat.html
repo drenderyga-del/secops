@@ -1,0 +1,56 @@
+{% import 'macros/icons.html' as icons %}
+{% if repo_table_rows and repo_table_groups %}
+<div class="cscan-tree-section" data-cscan-results>
+    <h2>{{ icons.icon('folder-open', 'icon-sm') }} Results</h2>
+    <p class="cscan-results-hint"><strong>Click</strong> folders to expand. Repository names open findings in this app; the <strong>GitLab</strong> column opens the repository externally.</p>
+
+    <details open class="cscan-product-scope">
+        <summary class="cscan-product-scope-summary">
+            <span class="cscan-details-chevron" aria-hidden="true"></span>
+            {{ icons.icon('cube', 'icon-sm') }}
+            <span class="cscan-product-scope-name">{{ product.name }}</span>
+            <span class="tree-meta">Repos: {{ repo_table_meta.repos }} · Findings: {{ repo_table_meta.findings }}</span>
+        </summary>
+
+        <div class="cscan-product-scope-body">
+            <div class="filter-bar signal-filter-surface cscan-repo-filter" role="search" aria-label="Filter config scan repositories" data-cscan-repo-filter>
+                <div class="filter-field">
+                    <label for="cscan-product-repo-filter">Repository</label>
+                    <div class="filter-input-wrap">
+                        <input id="cscan-product-repo-filter" type="search" class="cscan-repo-search-input" placeholder="Filter repositories…" aria-label="Filter repositories" aria-controls="cscan-product-results" autocomplete="off">
+                    </div>
+                </div>
+                <p class="filter-result-count" aria-live="polite"><span data-cscan-repo-visible>0</span> matching repositories</p>
+            </div>
+
+            <div id="cscan-product-results">
+                {% if repo_table_groups|length == 1 %}
+                {% set g = repo_table_groups[0] %}
+                <div class="cscan-path-group-wrap" data-cscan-group>
+                    <div class="cscan-single-group-label">
+                        {{ icons.icon('folder', 'icon-sm') }}
+                        <strong>{{ g.name }}</strong>
+                        <span class="tree-meta">Repos: {{ g.repos_count }} · Findings: {{ g.findings_total }}</span>
+                    </div>
+                    {% include 'partials/config_scan_repo_table_body.html' %}
+                </div>
+                {% else %}
+                {% for g in repo_table_groups %}
+                <details class="cscan-path-group-details" open data-cscan-group>
+                    <summary class="cscan-path-group-summary">
+                        <span class="cscan-details-chevron" aria-hidden="true"></span>
+                        {{ icons.icon('folder', 'icon-sm') }}
+                        <span class="cscan-path-group-name">{{ g.name }}</span>
+                        <span class="tree-meta">Repos: {{ g.repos_count }} · Findings: {{ g.findings_total }}</span>
+                    </summary>
+                    <div class="cscan-path-group-table-shell">
+                        {% include 'partials/config_scan_repo_table_body.html' %}
+                    </div>
+                </details>
+                {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+    </details>
+</div>
+{% endif %}

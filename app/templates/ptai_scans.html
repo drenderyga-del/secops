@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+{% import 'macros/data_surfaces.html' as data_surfaces %}
+
+{% block title %}PT AI Scans - DevSecOps Platform{% endblock %}
+
+{% macro ptai_engine_cell(scan) %}
+    {%- set stage = scan.ptai_stage -%}
+    {%- if not stage -%}
+        <span class="no-data">-</span>
+    {%- elif stage in ('Failed', 'Aborted') -%}
+        <span class="badge badge-danger" title="{{ scan.ptai_error or stage }}">{{ stage }}</span>
+    {%- elif stage == 'Done' -%}
+        <span class="badge badge-success">Done{% if scan.ptai_has_errors %} <span title="{{ scan.ptai_error or 'scan errors' }}">⚠</span>{% endif %}</span>
+    {%- else -%}
+        <span class="badge" title="Stage {{ stage }}">{{ stage }}{% if scan.ptai_progress is not none %} {{ scan.ptai_progress }}%{% endif %}</span>
+    {%- endif -%}
+{% endmacro %}
+
+{% macro ptai_status_badge(status) %}
+    {%- set s = (status or '')|upper -%}
+    {%- if s == 'SUCCESS' -%}
+        <span class="badge badge-success" title="Scan finished successfully">SUCCESS</span>
+    {%- elif s == 'ERROR' -%}
+        <span class="badge badge-danger" title="Scan failed in ASOC">ERROR</span>
+    {%- elif s == 'TRIGGER_FAILED' -%}
+        <span class="badge badge-danger" title="ASOC did not accept the scan">TRIGGER FAILED</span>
+    {%- elif s == 'PARTIAL_SUCCESS' -%}
+        <span class="badge badge-warning" title="Some scanners failed">PARTIAL</span>
+    {%- elif s == 'IN_PROGRESS' -%}
+        <span class="badge" title="Scan running in ASOC">IN PROGRESS</span>
+    {%- else -%}
+        <span class="badge badge-muted" title="Waiting for first poll / queued">{{ s or 'PENDING' }}</span>
+    {%- endif -%}
+{% endmacro %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1 id="ptai-scans-title">PT AI Scans</h1>
+            <p>Async PT AI scans triggered by the <code>ptai_scan</code> pipeline job. Status is polled from ASOC — the GitLab job only fires the scan.</p>
+        </div>
+    </div>
+
+    <section class="ptai-summary-grid" aria-label="PT AI summary">
+        <a class="ptai-summary-card" href="/ptai-scans">
+            <span>Total</span>
+            <strong>{{ summary.total }}</strong>
+        </a>
+        <a class="ptai-summary-card" href="/ptai-scans?status=pending">
+            <span>Pending</span>
+            <strong>{{ summary.pending }}</strong>
+        </a>
+        <a class="ptai-summary-card" href="/ptai-scans?status=in_progress">
+            <span>Running</span>
+            <strong>{{ summary.running }}</strong>
+        </a>
+        <a class="ptai-summary-card{% if summary.problems %} ptai-summary-card--problem{% endif %}" href="/ptai-scans?problem=true">
+            <span>Problems</span>
+            <strong>{{ summary.problems }}</strong>
+        </a>
+        <div class="ptai-summary-card">
+            <span>Last poll</span>
+            <strong class="ptai-summary-time">{{ summary.last_poll|localtime('%Y-%m-%d %H:%M') if summary.last_poll else '—' }}</strong>
+        </div>
+    </section>
+
+    <form id="filters" class="page-section filter-bar" method="get">
+        <input type="hidden" name="page" value="1">
+        <div class="filter-field select-field">
+            <label for="status">ASOC status</label>
+            <div class="select">
+                <select name="status" id="status">
+                    {% for option in ['all', 'pending', 'in_progress', 'success', 'error', 'partial_success', 'trigger_failed'] %}
+                        <option value="{{ option }}" {% if filters.status|lower == option %}selected{% endif %}>{{ option.replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="filter-field">
+            <label for="repo">Repository</label>
+            <div class="filter-input-wrap">
+                <input type="search" name="repo" id="repo" value="{{ filters.repo }}" placeholder="instance/group/repo" autocomplete="off">
+                <button type="button" class="filter-clear" data-clear-filter="repo" aria-label="Clear repository filter">{{ icons.icon('x-circle', 'icon-sm') }}</button>
+            </div>
+        </div>
+        <div class="filter-field">
+            <label for="branch">Branch</label>
+            <div class="filter-input-wrap">
+                <input type="search" name="branch" id="branch" value="{{ filters.branch }}" placeholder="main" autocomplete="off">
+                <button type="button" class="filter-clear" data-clear-filter="branch" aria-label="Clear branch filter">{{ icons.icon('x-circle', 'icon-sm') }}</button>
+            </div>
+        </div>
+        <label class="filter-check">
+            <input type="checkbox" name="problem" value="true" {% if filters.problem %}checked{% endif %}>
+            <span>Only problems</span>
+        </label>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-ghost btn-sm">{{ icons.icon('search', 'icon-sm') }}<span>Apply</span></button>
+            <a href="/ptai-scans" class="btn btn-outline btn-sm">{{ icons.icon('rotate', 'icon-sm') }}<span>Reset</span></a>
+        </div>
+    </form>
+
+    <section id="scans" class="page-section table-container ptai-table-container has-responsive-table">
+        {% call data_surfaces.responsive_table('ptai-scans-table', 'ptai-scans-title', 'xwide') %}
+        <table class="data-table ptai-table">
+            <thead>
+                <tr>
+                    <th>Repository</th>
+                    <th>Branch</th>
+                    <th>ASOC status</th>
+                    <th>PT AI engine</th>
+                    <th>ASOC reference</th>
+                    <th>GitLab</th>
+                    <th>Triggered</th>
+                    <th>Last poll</th>
+                    <th>Finished</th>
+                    <th>Alert</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in scans %}
+                <tr>
+                    <td class="ptai-repo-cell"><a href="/ptai-scans/{{ scan.id }}" title="Open scan details"><code>{{ scan.repo_slug or (scan.repository.path if scan.repository else '-') }}</code></a></td>
+                    <td class="ptai-branch-cell">{% if scan.branch %}<span class="badge ptai-branch-badge" title="{{ scan.branch }}">{{ scan.branch }}</span>{% else %}<span class="no-data">-</span>{% endif %}</td>
+                    <td class="ptai-nowrap-cell">{{ ptai_status_badge(scan.asoc_status) }}</td>
+                    <td class="ptai-nowrap-cell">
+                        {% set engine_result = ptai_result_url(scan) %}
+                        {% if engine_result %}<a class="ptai-nowrap-link" href="{{ engine_result }}" target="_blank" rel="noopener noreferrer" title="Open PT AI scan result">{{ ptai_engine_cell(scan) }} {{ icons.icon('arrow-up-right', 'icon-sm') }}</a>
+                        {% else %}{{ ptai_engine_cell(scan) }}{% endif %}
+                    </td>
+                    <td class="ptai-error-cell">
+                        {%- set asoc_ref = scan.asoc_pipeline_id or scan.asoc_task_id -%}
+                        {% set asoc_repository = asoc_repository_url(scan) %}
+                        {% if asoc_repository %}
+                            <a class="ptai-nowrap-link" href="{{ asoc_repository }}" target="_blank" rel="noopener noreferrer" title="Open ASOC repository{% if asoc_ref %}; pipeline/task ID: {{ asoc_ref }}{% endif %}">
+                                <span>Repository</span> {{ icons.icon('arrow-up-right', 'icon-sm') }}
+                            </a>
+                        {% endif %}
+                        {% if asoc_ref %}
+                            <code title="{{ asoc_ref }}">{{ asoc_ref[:8] }}…</code>
+                        {% else %}
+                            <span class="no-data">No pipeline/task ID</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if scan.job_web_url %}
+                            <a class="ptai-nowrap-link" href="{{ scan.job_web_url }}" target="_blank" rel="noopener">#{{ scan.gitlab_pipeline_id }} {{ icons.icon('arrow-up-right', 'icon-sm') }}</a>
+                        {% else %}
+                            <span class="no-data">#{{ scan.gitlab_pipeline_id }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="ptai-nowrap-cell">{% if scan.created_at %}<span class="timestamp">{{ scan.created_at|localtime('%Y-%m-%d %H:%M') }}</span>{% else %}<span class="no-data">-</span>{% endif %}</td>
+                    <td class="ptai-nowrap-cell">{% if scan.last_polled_at %}<span class="timestamp">{{ scan.last_polled_at|localtime('%Y-%m-%d %H:%M') }}</span>{% else %}<span class="no-data">-</span>{% endif %}</td>
+                    <td class="ptai-nowrap-cell">{% if scan.finished_at %}<span class="timestamp">{{ scan.finished_at|localtime('%Y-%m-%d %H:%M') }}</span>{% else %}<span class="no-data">-</span>{% endif %}</td>
+                    <td>{% if scan.last_alert_at %}<span class="badge badge-warning" title="{{ scan.last_alert_at|localtime('%Y-%m-%d %H:%M') }}">Sent</span>{% else %}<span class="no-data">-</span>{% endif %}</td>
+                    <td>
+                        {% if scan.error_text %}
+                            {{ data_surfaces.evidence(scan.error_text, 'ptai-scan-' ~ scan.id ~ '-error', 'Diagnostic') }}
+                        {% else %}
+                            <span class="no-data">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not scans %}
+                <tr><td colspan="11"><span class="no-data">No PT AI scans match the current filters.</span></td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+        {% endcall %}
+    </section>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination" aria-label="Pagination">
+        {% set query_suffix = '&' ~ query_base if query_base else '' %}
+        {% if page > 1 %}<a class="btn btn-sm" href="/ptai-scans?page={{ page - 1 }}{{ query_suffix }}">{{ icons.icon('arrow-left', 'icon-sm') }} Prev</a>{% endif %}
+        <span class="pagination-info">Page {{ page }} / {{ total_pages }} ({{ total }} scans)</span>
+        {% if page < total_pages %}<a class="btn btn-sm" href="/ptai-scans?page={{ page + 1 }}{{ query_suffix }}">Next {{ icons.icon('arrow-right', 'icon-sm') }}</a>{% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

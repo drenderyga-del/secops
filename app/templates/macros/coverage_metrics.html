@@ -1,0 +1,20 @@
+{% macro coverage_metrics(cards, filter_active=false, matching_count=0, total_count=0) %}
+<div class="audit-metrics-grid" aria-label="Coverage status filter">
+    {% for card in cards %}
+    <a
+        class="audit-metric{% if card.class_name %} {{ card.class_name }}{% endif %}{% if card.selected %} active{% endif %}"
+        href="{{ card.href }}"
+        {% if card.selected %}aria-current="page"{% endif %}
+    >
+        <span class="audit-metric-value">{{ card.count }}</span>
+        <span class="audit-metric-label">{{ card.label }}</span>
+        <span class="audit-metric-desc">{{ card.description }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% if filter_active %}
+<p class="coverage-match-summary" role="status">
+    Showing <strong>{{ matching_count }}</strong> of <strong>{{ total_count }}</strong> repositories matching the current filter.
+</p>
+{% endif %}
+{% endmacro %}

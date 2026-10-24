@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Config Guard · ScanOps{% endblock %}
+
+{% block content %}
+<div class="products-page">
+    <div class="page-header">
+        <div>
+            <h1>Config Guard</h1>
+            <p>GitLab CI/CD configuration security analysis across all products.</p>
+        </div>
+        <div class="page-actions">
+            <form method="post" action="/config-scan/run" style="margin: 0;">
+                <button type="submit" class="btn btn-outline btn-sm">{{ icons.icon('rotate', 'icon-sm') }} Scan all products</button>
+            </form>
+        </div>
+    </div>
+
+    <section id="scan" class="page-section scan-target-panel">
+        <form method="post" action="/config-scan/scan-target" class="scan-target-form">
+            <label for="config-scan-target" class="scan-target-label">{{ icons.icon('search', 'icon-sm') }} GitLab target</label>
+            <input type="url" name="target_url" required
+                   id="config-scan-target"
+                   placeholder="https://gitlab.company.com/group/subgroup/project"
+                   class="scan-target-input">
+            <button type="submit" class="btn btn-primary">{{ icons.icon('rotate', 'icon-sm') }} Start scan</button>
+        </form>
+    </section>
+
+    {% if scan_run and scan_run.status in ['queued', 'running'] %}
+    <div class="cscan-status-bar" style="margin-bottom: 1.25rem; border-color: rgba(56, 189, 248, 0.4);">
+        <span class="status-badge running">{{ icons.icon('spinner', 'icon-sm') }}&nbsp;{{ scan_run.status | title }}</span>
+        <span style="color: var(--text-secondary);">Run <strong style="color: var(--text-primary);">#{{ scan_run.id }}</strong> &mdash; {{ scan_run_projects_scanned }}/{{ scan_run_projects_total }} projects</span>
+    </div>
+    {% endif %}
+
+    <section id="products" class="page-section table-container" tabindex="0" aria-label="Configuration scan products">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Last Scan</th>
+                    <th>Status</th>
+                    <th>Projects</th>
+                    <th>Findings</th>
+                    <th>Severity</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in product_scans %}
+                <tr>
+                    <td>
+                        <div class="product-info">
+                            <strong>{{ item.product.name }}</strong>
+                            <small>{{ item.group_path }}</small>
+                        </div>
+                    </td>
+                    <td>
+                        {% if item.run %}
+                            <span class="timestamp">{{ item.run.finished_at|localtime('%Y-%m-%d %H:%M') if item.run.finished_at else '-' }}</span>
+                        {% else %}
+                            <span class="no-data">Never</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.run %}
+                            {% if item.run.status == 'succeeded' %}
+                                <span class="status-badge success">{{ icons.icon('check-circle', 'icon-sm') }}&nbsp;OK</span>
+                            {% elif item.run.status == 'failed' %}
+                                <span class="status-badge error">{{ icons.icon('x-circle', 'icon-sm') }}&nbsp;Failed</span>
+                            {% elif item.run.status in ['queued', 'running'] %}
+                                <span class="status-badge running">{{ icons.icon('spinner', 'icon-sm') }}&nbsp;{{ item.run.status | title }}</span>
+                            {% else %}
+                                <span class="status-badge unknown">{{ item.run.status }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="no-data">-</span>
+                        {% endif %}
+                        {% if item.metrics_hint %}
+                            <div class="cscan-overview-metrics-hint">{{ item.metrics_hint }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.run %}
+                            <span class="badge">{{ item.projects_scanned_display }}/{{ item.projects_total_display }}</span>
+                        {% else %}
+                            <span class="no-data">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.findings_display %}
+                            <span class="badge badge-danger">{{ item.findings_display }}</span>
+                        {% else %}
+                            <span class="no-data">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.summary %}
+                            <div class="cscan-sev-pills cscan-sev-pills--mini">
+                                {% if item.summary.critical %}<span class="pill pill-sev pill-sev--critical" title="Critical">C:{{ item.summary.critical }}</span>{% endif %}
+                                {% if item.summary.high %}<span class="pill pill-sev pill-sev--high" title="High">H:{{ item.summary.high }}</span>{% endif %}
+                                {% if item.summary.medium %}<span class="pill pill-sev pill-sev--medium" title="Medium">M:{{ item.summary.medium }}</span>{% endif %}
+                                {% if item.summary.low %}<span class="pill pill-sev pill-sev--low" title="Low">L:{{ item.summary.low }}</span>{% endif %}
+                                {% if item.summary.info %}<span class="pill pill-sev pill-sev--info" title="Info">I:{{ item.summary.info }}</span>{% endif %}
+                                {% if not item.summary.critical and not item.summary.high and not item.summary.medium and not item.summary.low and not (item.summary.info | default(0)) %}
+                                    <span class="badge badge-success">Clean</span>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <span class="no-data">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <a href="/config-scan/products/{{ item.product.id }}" class="btn btn-ghost btn-sm">
+                                Details {{ icons.icon('arrow-right', 'icon-sm') }}
+                            </a>
+                            <form method="post" action="/config-scan/run" style="margin: 0;">
+                                <input type="hidden" name="product_ids" value="{{ item.product.id }}">
+                                <button type="submit" class="btn btn-outline btn-sm">Scan product</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    {% if not product_scans %}
+    <div class="empty-state">
+        <div class="empty-icon">{{ icons.icon('gear', 'icon-lg') }}</div>
+        <h2>No Products Found</h2>
+        <p>No products have been configured yet. Products will appear here once GitLab CI jobs start sending data, or use "Scan Target" above.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% set ns = namespace(has_active=false) %}
+{% if scan_run and scan_run.status in ['queued', 'running'] %}
+  {% set ns.has_active = true %}
+{% endif %}
+{% if not ns.has_active %}
+  {% for item in product_scans %}
+    {% if item.run and item.run.status in ['queued', 'running'] %}
+      {% set ns.has_active = true %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+{% if ns.has_active %}
+<script>setTimeout(function () { window.location.reload(); }, 5000);</script>
+{% endif %}
+{% endblock %}

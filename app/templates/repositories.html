@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import 'macros/icons.html' as icons %}
+
+{% block title %}Repository targets · ScanOps{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Targets</h1>
+        <p>Repository targets are the concrete scopes observed by scanners and pipelines.</p>
+    </div>
+    <nav class="module-tabs" aria-label="Target level">
+        <a class="module-tab" href="/targets/operator?level=product">Product targets</a>
+        <a class="module-tab active" href="/targets/operator?level=repository" aria-current="page">Repository targets</a>
+    </nav>
+</div>
+
+<section id="repositories" class="page-section table-container" tabindex="0" aria-label="Repositories">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Repository</th>
+                <th>Product</th>
+                <th>Total Jobs</th>
+                <th>Success</th>
+                <th>Failed</th>
+                <th>Success Rate</th>
+                <th>Avg Pipeline</th>
+                <th>Avg Job</th>
+                <th>Last Scan</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in repositories %}
+            {% set repo = row.repository %}
+            {% set product = row.product %}
+            {% set stats = row.stats %}
+            <tr>
+                <td>
+                    <div class="repo-info">
+                        <strong>{{ repo.path }}</strong>
+                        <small>ID {{ repo.id }}</small>
+                    </div>
+                </td>
+                <td>
+                    {% if product %}
+                        <strong>{{ product.name }}</strong>
+                    {% else %}
+                        <span class="no-data">—</span>
+                    {% endif %}
+                </td>
+                <td>{{ stats.total_jobs }}</td>
+                <td>{{ stats.successful_jobs }}</td>
+                <td>{{ stats.failed_jobs }}</td>
+                <td>{{ stats.success_rate }}%</td>
+                <td>{{ row.pipeline_duration.avg_label }}</td>
+                <td>{{ row.job_duration.avg_label }}</td>
+                <td>
+                    {% if repo.last_report_at %}
+                        <span class="timestamp">{{ repo.last_report_at|localtime('%Y-%m-%d %H:%M:%S') }}</span>
+                    {% else %}
+                        <span class="no-data">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="action-buttons">
+                        <a href="/repos/{{ repo.id }}/jobs" class="btn btn-ghost btn-sm">
+                            {{ icons.icon('layers', 'icon-sm') }}
+                            <span>View job logs</span>
+                        </a>
+                        <a href="{{ repository_target_url(repo.id) }}" class="btn btn-ghost btn-sm">
+                            {{ icons.icon('arrow-right', 'icon-sm') }}
+                            <span>Open Target 360</span>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if not repositories %}
+    <div class="empty-state">
+        <div class="empty-icon">{{ icons.icon('search', 'icon-lg') }}</div>
+        <h2>No repository targets yet</h2>
+        <p>Start ingesting or registering pipelines to populate this target level.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
