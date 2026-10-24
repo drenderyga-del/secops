@@ -207,3 +207,10 @@ def test_disabled_unreadable_connector_does_not_block_agent_access(api):
     db.add(IntegrationConfig(connector='asoc', enabled=False, values_json='{}', secrets_encrypted='unreadable-fixture'))
     db.commit()
     assert client.get('/api/v1/agent/jobs', headers=agent).status_code == 200
+
+
+def test_agent_cannot_reuse_effective_padded_encryption_key(api, monkeypatch):
+    client, db, job_id, agent = api
+    token = agent['Authorization'].removeprefix('Bearer ')
+    monkeypatch.setenv('INTEGRATION_CREDENTIALS_KEY', ' ' + token + '\t')
+    assert client.get('/api/v1/agent/jobs', headers=agent).status_code == 503

@@ -43,8 +43,13 @@ def secret_values(value):
 
 
 def application_secrets(*, include_agent=True):
-    return [os.getenv(name, "") for name in APPLICATION_SECRET_NAMES
-            if include_agent or name != "SCANOPS_AGENT_API_TOKEN"]
+    values = [os.getenv(name, "") for name in APPLICATION_SECRET_NAMES
+              if include_agent or name != "SCANOPS_AGENT_API_TOKEN"]
+    # Both credential stores strip key material before deriving encryption keys.
+    # Compare the effective key as well as the raw configured credentials.
+    material = (os.getenv("INTEGRATION_CREDENTIALS_KEY")
+                or os.getenv("PIPE_BEARER_TOKEN") or "").strip()
+    return [*values, material]
 
 
 def environment_integration_secrets():

@@ -228,3 +228,17 @@ def test_provider_base_url_never_persists_credential_paths(api, monkeypatch):
     assert body['api_base_url'] not in response.text
     assert db.query(AsocDestination).count() == 0
     request.assert_not_called()
+
+
+@pytest.mark.parametrize('padding', [' ', '\t', '\n', ' \t'])
+def test_provider_token_cannot_reuse_effective_padded_encryption_key(api, monkeypatch, padding):
+    client, db = api
+    effective_key = 'synthetic-padded-encryption-material'
+    monkeypatch.setenv('INTEGRATION_CREDENTIALS_KEY', padding + effective_key + padding)
+    request = Mock(); monkeypatch.setattr('app.asoc_adapters.requests.request', request)
+    body = replacement(); body['token'] = effective_key
+    response = operator(client, 'post', '/destinations', json=body)
+    assert response.status_code == 422, response.text
+    assert effective_key not in response.text
+    assert db.query(AsocDestination).count() == 0
+    request.assert_not_called()
