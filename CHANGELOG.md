@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replace the long README with a concise English overview, Docker demo
+  quickstart and screenshots; move deployment details into dedicated guides.
+
 - Bind report receipts to immutable destination versions and target snapshots;
   preserve unknown outcomes for ambiguous uploads and block credential reuse.
 - Require a dedicated encryption key for new report destinations; make product

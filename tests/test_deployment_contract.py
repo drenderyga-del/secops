@@ -135,7 +135,7 @@ def test_release_metadata_is_consistent():
     assert f"SECPIPE_IMAGE={image}" in (ROOT / ".env.example").read_text(
         encoding="utf-8"
     )
-    assert f"SECPIPE_IMAGE={image}" in (ROOT / "README.md").read_text(
+    assert f"SECPIPE_IMAGE={image}" in (ROOT / "docs/operations-reference.ru.md").read_text(
         encoding="utf-8"
     )
 
@@ -153,10 +153,10 @@ def test_production_compose_requires_auth_and_shared_integration_key():
 
 
 def test_credential_reset_runbook_uses_host_uid_for_manifest_bind_mount():
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs/operations-reference.ru.md").read_text(encoding="utf-8")
 
-    assert readme.count('--user "$(id -u):$(id -g)"') >= 2
-    assert "docker build \\\n     --platform linux/amd64" in readme
+    assert runbook.count('--user "$(id -u):$(id -g)"') >= 2
+    assert "docker build \\\n     --platform linux/amd64" in runbook
 
 
 def test_production_dockerfile_builds_without_private_infrastructure():
