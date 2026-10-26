@@ -2,6 +2,7 @@
 -- safe across a rollback to a release that still physically deletes missing
 -- product cards. The guard FK intentionally rejects that deletion.
 -- Block active sync transactions until the guard and insert trigger commit.
+SET LOCAL lock_timeout = '15s';
 LOCK TABLE asoc_products IN ACCESS EXCLUSIVE MODE;
 
 CREATE TABLE IF NOT EXISTS asoc_product_lifecycle_guards (

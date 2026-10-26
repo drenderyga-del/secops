@@ -29,3 +29,6 @@ handling and private reporting.
 
 Provider API contracts are tested using doubles. Live ASOC installations,
 production access and external LLM vendors are not exercised by the demo.
+
+For repeatable source updates, use the [public synchronization guide](public-sync.md).
+Its private rules, conflict report and binary approvals complement the source scanner.

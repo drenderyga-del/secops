@@ -36,3 +36,12 @@ def safe_external_http_url(value: object) -> str | None:
         return None
 
     return candidate
+
+
+def safe_evidence_http_url(value: object) -> str | None:
+    """Project persisted GitLab evidence without credentials or query/fragment data."""
+    candidate = safe_external_http_url(value)
+    if candidate is None or len(candidate) > 2048:
+        return None
+    from .asoc_description_safety import _safe_http_url
+    return _safe_http_url(candidate, strip_query=True, allow_name_segments=True)

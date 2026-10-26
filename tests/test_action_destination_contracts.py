@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -150,6 +150,46 @@ def test_repository_job_evidence_uses_exact_repository_id_despite_path_collision
             for repository in (selected, same_path, substring)
         ]
     )
+    failed_at = now - timedelta(days=2)
+    db.add_all(
+        [
+            JobReport(
+                repository_id=selected.id,
+                job_name="resolved-job",
+                ref="main",
+                job_status=JobStatus.FAILED,
+                finished_at=failed_at,
+            ),
+            JobReport(
+                repository_id=selected.id,
+                job_name="resolved-job",
+                ref="main",
+                job_status=JobStatus.SUCCESS,
+                finished_at=failed_at + timedelta(hours=1),
+            ),
+            JobReport(
+                repository_id=selected.id,
+                job_name="active-job",
+                ref="main",
+                job_status=JobStatus.FAILED,
+                finished_at=failed_at + timedelta(hours=2),
+            ),
+            JobReport(
+                repository_id=same_path.id,
+                job_name="same-path-job",
+                ref="main",
+                job_status=JobStatus.FAILED,
+                finished_at=failed_at + timedelta(hours=3),
+            ),
+            JobReport(
+                repository_id=substring.id,
+                job_name="similar-prefix-job",
+                ref="main",
+                job_status=JobStatus.FAILED,
+                finished_at=failed_at + timedelta(hours=4),
+            ),
+        ]
+    )
     db.commit()
 
     jobs, total = DatabaseService(db).get_jobs_paginated(
@@ -162,8 +202,25 @@ def test_repository_job_evidence_uses_exact_repository_id_despite_path_collision
         page_size=20,
     )
 
-    assert total == 1
-    assert [job.repository_id for job in jobs] == [selected.id]
+    assert total == 4
+    assert {job.repository_id for job in jobs} == {selected.id}
+
+    unresolved_jobs, unresolved_total = DatabaseService(db).get_jobs_paginated(
+        repo_filter=selected.path,
+        repository_id=selected.id,
+        job_filter=None,
+        category_filter=None,
+        status_filter="failed",
+        page=1,
+        page_size=20,
+        only_failed=True,
+        timeframe="all",
+    )
+
+    assert unresolved_total == 1
+    assert [(job.repository_id, job.job_name) for job in unresolved_jobs] == [
+        (selected.id, "active-job")
+    ]
 
 
 def _equal_timestamp_active_failure_count(

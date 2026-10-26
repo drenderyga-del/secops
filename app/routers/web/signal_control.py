@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import re
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
@@ -66,7 +67,7 @@ from ...pipeline_query_service import PipelineQueryService, normalize_pipeline_f
 from ...ptai_client import ptai_result_url
 from ...ptai_outcome import resolve_ptai_outcome
 from ...target_360_service import Target360Service
-from ...url_safety import safe_external_http_url
+from ...url_safety import safe_evidence_http_url
 from .common import get_db
 
 router = APIRouter(tags=["signal-control"])
@@ -578,7 +579,7 @@ def signal_control_failed_jobs(
                 "repository": repository.path if repository else "Unknown repository",
                 "product": product.name if product else None,
                 "ref": job.ref,
-                "pipeline_url": safe_external_http_url(job.pipeline_url),
+                "pipeline_url": safe_evidence_http_url(job.pipeline_url),
                 "duration_seconds": job.duration_seconds,
                 "finished_at": _iso(job.finished_at),
                 "age_seconds": max(int((now - finished_at).total_seconds()), 0),
@@ -738,7 +739,7 @@ def signal_control_job_journal(
                 "repository": repository.path if repository else "Unknown repository",
                 "product": product.name if product else None,
                 "ref": record.ref,
-                "pipeline_url": safe_external_http_url(record.pipeline_url),
+                "pipeline_url": safe_evidence_http_url(record.pipeline_url),
                 "duration_seconds": record.duration_seconds,
                 "finished_at": _iso(record.finished_at),
                 "detail": (
@@ -1486,6 +1487,46 @@ def signal_control_coverage(db: Session = Depends(get_db)):
     }
 
 
+def _repository_search_terms(value: str) -> list[str]:
+    """Split repository searches on punctuation so paths match human input."""
+    return [term for term in re.split(r"[^\w]+|_+", value.casefold()) if term]
+
+
+def _normalized_search_column(column):
+    normalized = func.lower(column)
+    for separator in ("/", "-", "_", ".", ":"):
+        normalized = func.replace(normalized, separator, " ")
+    for _ in range(4):
+        normalized = func.replace(normalized, "  ", " ")
+    return func.trim(normalized)
+
+
+def _filter_repositories_by_search(query, value: str):
+    path = _normalized_search_column(Repository.path)
+    product_name = _normalized_search_column(Product.name)
+    literal_match = or_(
+        func.lower(Repository.path).contains(value.casefold(), autoescape=True),
+        func.lower(Product.name).contains(value.casefold(), autoescape=True),
+    )
+    term_matches = []
+    for term in _repository_search_terms(value):
+        term_matches.append(
+            or_(
+                path == term,
+                path.startswith(f"{term} "),
+                path.endswith(f" {term}"),
+                path.contains(f" {term} "),
+                product_name == term,
+                product_name.startswith(f"{term} "),
+                product_name.endswith(f" {term}"),
+                product_name.contains(f" {term} "),
+            )
+        )
+    if not term_matches:
+        return query.filter(literal_match)
+    return query.filter(or_(literal_match, and_(*term_matches)))
+
+
 @router.get("/api/ui/repositories", response_class=JSONResponse)
 def signal_control_repositories(
     q: str = Query("", max_length=240),
@@ -1510,13 +1551,7 @@ def signal_control_repositories(
     if product:
         query = query.filter(Repository.product_id == product)
     if normalized_q:
-        search = normalized_q.casefold()
-        query = query.filter(
-            or_(
-                func.lower(Repository.path).contains(search, autoescape=True),
-                func.lower(Product.name).contains(search, autoescape=True),
-            )
-        )
+        query = _filter_repositories_by_search(query, normalized_q)
     matching = int(
         query.order_by(None).with_entities(func.count(Repository.id)).scalar()
         or 0

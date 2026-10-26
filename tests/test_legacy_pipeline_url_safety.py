@@ -155,3 +155,20 @@ def test_logs_template_only_links_safe_persisted_pipeline_urls(job_db, monkeypat
     assert f'href="{SAFE_PIPELINE_URL}"' in html
     assert 'target="_blank" rel="noopener noreferrer"' in html
     assert html.count("View pipeline") == 1
+
+
+@pytest.mark.parametrize('value', [
+    'https://gitlab.example/platform/glpat-' + 'a' * 20,
+    'https://gitlab.example/platform/private_token=not-public',
+    'https://gitlab.example/platform/private_token%3Dnot-public',
+    'https://glpat-' + 'a' * 20 + '.example/jobs/1',
+])
+def test_evidence_link_rejects_credential_shaped_path_and_host(value):
+    from app.url_safety import safe_evidence_http_url
+    assert safe_evidence_http_url(value) is None
+
+
+def test_evidence_link_preserves_legitimate_project_names_and_strips_all_query_data():
+    from app.url_safety import safe_evidence_http_url
+    assert safe_evidence_http_url('https://gitlab.example/platform/secrets/-/jobs/1?foo=bar#details') == (
+        'https://gitlab.example/platform/secrets/-/jobs/1')

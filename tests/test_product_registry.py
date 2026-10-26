@@ -237,6 +237,76 @@ def test_sibling_groups_in_one_namespace_keep_their_own_audited_repositories():
     assert "qa/product-02/unscanned" not in coverage[first.id]
 
 
+@pytest.mark.parametrize("audited", [False, True])
+def test_same_project_path_on_distinct_gitlab_instances_keeps_separate_evidence(audited):
+    db = _db()
+    card = _card("multi-instance", NOW - timedelta(days=1))
+    db.add(card)
+    expected = {}
+    for index, host in enumerate(("gitlab-a.example", "gitlab-b.example"), start=1):
+        group = Product(name=f"Group {index}", path="team/shared", gitlab_base_url=f"https://{host}")
+        db.add(group)
+        db.flush()
+        repository = Repository(product_id=group.id, path="team/shared/api")
+        db.add(repository)
+        db.flush()
+        url = f"https://{host}/team/shared/api"
+        expected[repository.id] = (group.id, url)
+        db.add(AsocProductRepositoryMapping(
+            asoc_id=card.asoc_id,
+            product_id=group.id,
+            description_url=f"https://{host}/team/shared",
+        ))
+        db.add(ActivePipeline(
+            project_id=index,
+            pipeline_id=100 + index,
+            repository_id=repository.id,
+            product_id=group.id,
+            status=PipelineStatus.COMPLETED if index == 1 else PipelineStatus.FAILED,
+            completed_at=NOW - timedelta(hours=1),
+            web_url=f"{url}/-/pipelines/{100 + index}",
+        ))
+        if audited:
+            audit = AuditRepository(
+                instance_host=host,
+                project_id=index,
+                path_with_namespace=repository.path,
+                web_url=url,
+            )
+            db.add(audit)
+            db.flush()
+            db.add(AuditSnapshot(
+                audit_repository_id=audit.id,
+                scanned_at=NOW - timedelta(minutes=30),
+                status=AuditCoverageStatus.COVERED if index == 1 else AuditCoverageStatus.PIPELINE_NO_SEC,
+            ))
+    db.commit()
+
+    registry = build_registry(db, RegistryQuery(), now=NOW)
+    row = registry["rows"][0]
+    assert row["repositories"]["total"] == 2
+    assert row["repositories"]["monitored"] == 2
+    assert row["repositories"]["scanned"] == (1 if audited else 0)
+    assert row["pipelines"]["completed"] == 1
+    assert row["pipelines"]["failed"] == 1
+    assert row["pipelines"]["success_rate"] == 50
+    assert registry["summary"]["repositories"]["total"] == 2
+    detail = product_detail(db, asoc_id=card.asoc_id, now=NOW)
+    assert {
+        item["scanops_repository_id"]: (item["group_id"], item["url"])
+        for item in detail["repositories"]
+    } == expected
+    for item in detail["repositories"]:
+        assert item["jobs_href"] == (
+            f"/repos/{item['scanops_repository_id']}/jobs?only_failed=true&status=failed&timeframe=all"
+        )
+    workbook = load_workbook(BytesIO(export_xlsx(registry)))
+    summary = dict(workbook["Summary"].iter_rows(values_only=True))
+    assert summary["Repositories in groups"] == 2
+    assert summary["Pipeline success, 30d"] == 50
+    db.close()
+
+
 def _product_with_evidence(db):
     group = Product(name="example_app", path="sandbox/example_app", gitlab_base_url="https://gitlab.example")
     db.add(group)

@@ -63,3 +63,26 @@ def test_asoc_lifecycle_migration_allows_current_sync_and_blocks_legacy_writes()
                 text("DELETE FROM asoc_products WHERE asoc_id = :asoc_id"),
                 {"asoc_id": asoc_id},
             )
+
+
+@pytest.mark.needs_db
+def test_lifecycle_upgrade_exclusive_lock_has_bounded_wait():
+    from pathlib import Path
+    if engine.dialect.name != 'postgresql':
+        pytest.skip('table lock timeout requires PostgreSQL')
+    migration = (Path(__file__).resolve().parents[1] / 'migrations/20260925_asoc_product_safety.sql').read_text()
+    timeout = "SET LOCAL lock_timeout = '15s';"
+    assert timeout in migration
+    assert migration.index(timeout) < migration.index('LOCK TABLE asoc_products')
+    # Preserve the production policy while making contention acceptance fast.
+    statement = migration.replace(timeout, "SET LOCAL lock_timeout = '150ms';")
+    with engine.begin() as blocker:
+        blocker.exec_driver_sql('LOCK TABLE asoc_products IN ACCESS SHARE MODE')
+        with engine.connect() as contender:
+            transaction = contender.begin()
+            try:
+                with pytest.raises(DBAPIError) as error:
+                    contender.exec_driver_sql(statement)
+                assert getattr(error.value.orig, 'pgcode', None) == '55P03'
+            finally:
+                transaction.rollback()

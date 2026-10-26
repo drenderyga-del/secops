@@ -634,13 +634,21 @@ test.describe('Signal Control production workspace', () => {
     expect(tableWidth.scroll).toBeLessThanOrEqual(tableWidth.client + 1);
     await expect(rows.first().locator('.repository-stat')).toHaveCount(2);
     await expect(rows.first().locator('.repository-stat').first().locator('small')).toHaveText(
-      /\d+ healthy · \d+ broken keys/,
+      /\d+ healthy · \d+ unresolved failures/,
     );
+    const overlappingHealthActions = await rows.evaluateAll((elements) => elements.flatMap((row) => {
+      const health = row.querySelector(':scope > .status')?.getBoundingClientRect();
+      const actions = row.querySelector('.repository-actions')?.getBoundingClientRect();
+      return health && actions && health.right > actions.left
+        ? [{ healthRight: health.right, actionsLeft: actions.left }]
+        : [];
+    }));
+    expect(overlappingHealthActions).toEqual([]);
     await expect(rows.first().getByRole('link', { name: 'Repository 360' })).toHaveAttribute(
       'href',
       /\/targets\/repositories\/\d+/,
     );
-    await expect(rows.first().getByRole('link', { name: 'Jobs' })).toHaveAttribute(
+    await expect(rows.first().getByRole('link', { name: 'Jobs', exact: true })).toHaveAttribute(
       'href',
       /\/repos\/\d+\/jobs/,
     );

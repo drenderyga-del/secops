@@ -100,6 +100,8 @@ def test_target_360_keeps_each_long_diagnostic_exact_in_shared_disclosure():
         ui_auth_enabled=True,
         repository=SimpleNamespace(id=7, path="platform/example_app/api"),
         product=SimpleNamespace(name="ExampleApp", id=3),
+        gitlab_repository_url=None,
+        job_health={"broken_keys": 0, "failures": [], "failures_href": "/logs"},
         coverage={"expected": 1, "configured": 0, "missing": 1, "excluded": 0},
         freshness={"state": "stale", "label": "stale", "observed_at": None},
         summary={

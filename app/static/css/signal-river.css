@@ -2826,6 +2826,17 @@ pre,
 .target360-versions p { color: var(--text-muted); font-size: var(--type-label); }
 .target360-versions ul { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .target360-versions li { padding: 6px 9px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; background: var(--bg-tertiary); font-family: var(--font-mono); font-size: var(--type-label); }
+.target360-job-health { padding: 16px 18px; border: 1px solid oklch(0.68 0.22 24 / 0.28); border-radius: var(--radius); background: oklch(0.68 0.22 24 / 0.055); }
+.target360-job-health-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.target360-job-health h2 { margin: 4px 0 0; color: var(--error); }
+.target360-job-health p { margin-top: 5px; color: var(--text-muted); font-size: var(--type-label); }
+.target360-job-failures { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.target360-job-failures li { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding-top: 9px; border-top: 1px solid var(--border); }
+.target360-job-failures strong, .target360-job-failures small { display: block; overflow-wrap: anywhere; }
+.target360-job-failures small { margin-top: 3px; color: var(--text-muted); font-size: var(--type-label); }
+.target360-job-failure-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.target360-job-failure-links a, .target360-execution-actions a { color: var(--accent-primary); font-size: var(--type-label); font-weight: 650; text-decoration: none; white-space: nowrap; }
+.target360-execution-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; }
 
 .target360-section { min-width: 0; }
 .target360-controls-table { padding: 0 !important; }
@@ -2930,6 +2941,7 @@ pre,
     .target360-kpi:nth-child(2) { border-right: 0; }
     .target360-kpi:last-child { border-bottom: 0; }
     .target360-versions,
+    .target360-job-health-heading,
     .target360-timeline-heading { align-items: flex-start; flex-direction: column; }
     .target360-versions ul { justify-content: flex-start; }
     .signal-river-layout .target360-source-filter { width: 100%; max-width: 100%; }

@@ -33,7 +33,7 @@
         {% for cat in job_categories %}
             {% set is_active = (cat.value == category|lower) %}
             <a class="category-card{% if is_active %} active{% endif %}"
-               href="{{ base_path }}?category={{ cat.value }}&status={{ status_filter }}&timeframe={{ timeframe }}">
+               href="{{ base_path }}?category={{ cat.value }}&status={{ status_filter }}&timeframe={{ timeframe }}{% if only_failed %}&only_failed=true{% endif %}">
                 <span class="category-icon">{{ icons.icon(cat.icon) }}</span>
                 <span class="category-label">{{ cat.label }}</span>
             </a>
@@ -43,6 +43,7 @@
     <form id="filters" class="page-section filter-bar signal-filter-surface" method="get" aria-label="Filter jobs">
         <input type="hidden" name="category" value="{{ category }}">
         <input type="hidden" name="page" value="1">
+        {% if only_failed %}<input type="hidden" name="only_failed" value="true">{% endif %}
         {% if repo_locked %}
         <input type="hidden" name="repo" value="{{ repo_filter }}">
         <div class="filter-field locked-field">
@@ -93,7 +94,7 @@
             </div>
         </div>
         <div class="filter-actions">
-            <a href="{{ base_path }}?timeframe={{ timeframe }}{% if repo_locked %}&repo={{ repo_filter | urlencode }}{% endif %}" class="btn btn-outline btn-sm">{{ icons.icon('rotate', 'icon-sm') }}<span>Reset</span></a>
+            <a href="{{ base_path }}?timeframe={{ timeframe }}{% if repo_locked %}&repo={{ repo_filter | urlencode }}{% endif %}{% if only_failed %}&only_failed=true&status=failed{% endif %}" class="btn btn-outline btn-sm">{{ icons.icon('rotate', 'icon-sm') }}<span>Reset</span></a>
         </div>
     </form>
 
@@ -227,13 +228,13 @@
             <span>Page {{ page }} of {{ total_pages }}</span>
             <div class="pagination-controls">
                 {% if page > 1 %}
-                    <a class="btn btn-outline btn-sm" href="{{ base_path }}?category={{ category }}&repo={{ repo_filter | urlencode }}&job={{ job_filter | urlencode }}&status={{ status_filter }}&timeframe={{ timeframe }}&page={{ page - 1 }}">
+                    <a class="btn btn-outline btn-sm" href="{{ base_path }}?category={{ category }}&repo={{ repo_filter | urlencode }}&job={{ job_filter | urlencode }}&status={{ status_filter }}&timeframe={{ timeframe }}&page={{ page - 1 }}{% if only_failed %}&only_failed=true{% endif %}">
                         {{ icons.icon('arrow-left', 'icon-sm') }}
                         <span>Prev</span>
                     </a>
                 {% endif %}
                 {% if page < total_pages %}
-                    <a class="btn btn-outline btn-sm" href="{{ base_path }}?category={{ category }}&repo={{ repo_filter | urlencode }}&job={{ job_filter | urlencode }}&status={{ status_filter }}&timeframe={{ timeframe }}&page={{ page + 1 }}">
+                    <a class="btn btn-outline btn-sm" href="{{ base_path }}?category={{ category }}&repo={{ repo_filter | urlencode }}&job={{ job_filter | urlencode }}&status={{ status_filter }}&timeframe={{ timeframe }}&page={{ page + 1 }}{% if only_failed %}&only_failed=true{% endif %}">
                         <span>Next</span>
                         {{ icons.icon('arrow-right', 'icon-sm') }}
                     </a>
