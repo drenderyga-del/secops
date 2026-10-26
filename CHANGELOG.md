@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Translate the remaining public documentation into English and rename the
+  operator reference without a language suffix.
+
 - Replace the long README with a concise English overview, Docker demo
   quickstart and screenshots; move deployment details into dedicated guides.
 
