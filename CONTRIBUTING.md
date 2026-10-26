@@ -80,4 +80,4 @@ Deployments own their registry, CI and credentials outside this repository. The
 optional scripts/sync_internal_release.sh flow exports an exact tagged main
 snapshot while preserving destination-owned files. Always pass the source
 remote explicitly (normally --remote origin). Test an export in a disposable
-checkout before using it in a private environment; see README.md for details.
+checkout before using it in a private environment; see [the operator reference](docs/operations-reference.ru.md) for details.
