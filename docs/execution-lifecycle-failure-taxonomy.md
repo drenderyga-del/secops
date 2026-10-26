@@ -2,7 +2,7 @@
 
 Status: accepted implementation contract for `INT-0 Baseline`
 
-Notion task: `Согласовать Execution lifecycle и failure taxonomy`
+Notion task: `Agree on the execution lifecycle and failure taxonomy`
 Effort: `M`
 Scope: GitLab pipelines/jobs, IaC, config scan, PT AI and ASOC delivery.
 
@@ -201,4 +201,4 @@ acceptable; none of those raw values implicitly becomes end-to-end success.
 
 Operator thresholds and required delivery obligations belong in each future
 control contract. Reliability baseline values are tracked separately by the
-`Снять reliability baseline` task and do not change this vocabulary.
+`Measure the reliability baseline` task and do not change this vocabulary.

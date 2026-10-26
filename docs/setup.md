@@ -79,7 +79,7 @@ readiness check.
 
 Back up PostgreSQL and the stable encryption key. Reports live in named Docker
 volumes. See [.env.example](../.env.example) for the complete environment contract
-and the [extended operator notes (Russian)](operations-reference.ru.md) for
+and the [extended operator notes](operations-reference.md) for
 retention, credential recovery and private deployment exports.
 
 ## Demo data

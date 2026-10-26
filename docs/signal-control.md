@@ -1,16 +1,15 @@
 # Signal Control workspace
 
-Signal Control — production workspace ScanOps поверх существующей доменной модели.
-Это не отдельный mock и не замена backend-функций: интерфейс читает сохранённые
-executions, jobs, pipelines, products, repositories, control bindings, scanner
-runs, deliveries, worker heartbeats и integration health через read-only view
-models. Детальные доменные операции открывают канонический operator workbench,
-а конфигурация интеграций выполняется непосредственно в Signal Control через
-существующие защищённые backend endpoints.
+Signal Control is the ScanOps production workspace on top of the existing domain
+model. Its read-only view models expose persisted executions, jobs, pipelines,
+products, repositories, control bindings, scanner runs, deliveries, worker
+heartbeats and integration health. Detailed domain actions open the canonical
+operator workbench. Integration configuration uses the existing protected backend
+endpoints directly from Signal Control.
 
-## Навигация
+## Navigation
 
-Все основные разделы имеют канонические product URL:
+The main sections have canonical product URLs:
 
 ```text
 /
@@ -35,178 +34,172 @@ models. Детальные доменные операции открывают 
 /integrations?integration=gitlab
 ```
 
-`/executions` показывает durable execution lifecycle. `/logs` — полный job
-journal с category, repository, job, status и timeframe filters.
+`/executions` shows the durable execution lifecycle. `/logs` is the complete job
+journal with category, repository, job, status and timeframe filters.
 Executions, Job Journal/Failed Jobs, Active Pipelines, Config Guard findings,
-PT AI scans и Repositories используют один нижний pagination control: диапазон,
-`Page N of M`, переходы назад/вперёд и выбор `25`/`50`/`100` строк. `page` и
-`page_size` сохраняются в URL, сбрасываются на первую страницу при изменении
-фильтра или размера страницы и восстанавливаются через browser Back.
-`/logs?status=failed` использует тот же контракт как recovery queue. Старые
-`/next?view=...` остаются только permanent redirect
-aliases и не являются product URLs. Старые `/classic...` адреса также являются
-только permanent redirect aliases: второго пользовательского интерфейса в
-продукте больше нет.
+PT AI scans and Repositories share one bottom pagination control: result range,
+`Page N of M`, previous/next links and a `25`/`50`/`100` page-size selector.
+`page` and `page_size` persist in the URL. Changing a filter or page size resets
+the page to one; browser Back restores the selected state.
+`/logs?status=failed` uses the same contract as a recovery queue.
+Legacy `/next?view=...` and `/classic...` URLs are permanent redirect aliases,
+not separate product interfaces.
 
-Для операций, которым нужен расширенный server-rendered workbench (запуск
-сканов, ручная синхронизация и расширенная диагностика), основной экран
-открывает тот же текстовый product shell по явным маршрутам
+Actions requiring the extended server-rendered workbench, such as scan launches,
+manual synchronization and advanced diagnostics, open the same product shell at
 `/config-scan/operator`, `/iac/operator`, `/coverage/operator`,
-`/scanners/operator` и `/targets/operator`.
-`/overview/operator` остаётся только `308` compatibility alias на `/` и
-не является отдельным workbench. На scanner
-operator workspace сохранены существующие adapter connection, latest-run и
-seven-day workload drill-downs; канонический `/scanners` остаётся runtime
-registry. Target operator workspace сохраняет административные действия
-Normalize paths, Cleanup duplicates и Delete product; канонические Products и
-Repositories остаются рабочими read-only inventory. Pipeline и PT AI filters,
-pagination, products, repositories и integration management работают
-непосредственно на канонических React-экранах.
-Сохранённые server-rendered snapshots этих коллекций доступны по явным
-`/pipelines/operator`, `/ptai-scans/operator` и `/integrations/operator`; они не
-владеют каноническими product URL.
-Из `/pipelines` основной переход открывает внутренний detail route по
-`ActivePipeline.id`; отдельное действие `GitLab ↗` сохраняет прямую внешнюю
-ссылку. Detail показывает только сохранённые jobs, группирует их в фактические
-stages и явно помечает `tracked_only` scope, если регистрация ограничивала
-список job names.
+`/scanners/operator` or `/targets/operator`.
+`/overview/operator` is a `308` compatibility alias for `/`, not a separate
+workbench. The scanner operator workspace retains adapter connection,
+latest-run and seven-day workload drill-downs; canonical `/scanners` remains the
+runtime registry. Target administration retains Normalize paths, Cleanup
+duplicates and Delete product; canonical Products and Repositories remain
+read-only inventories. Pipeline/PT AI filters, pagination, product/repository
+browsing and integration management work directly on the canonical React pages.
+Explicit `/pipelines/operator`, `/ptai-scans/operator` and
+`/integrations/operator` routes retain server-rendered collection snapshots.
+
+The primary link from `/pipelines` opens the internal detail route using
+`ActivePipeline.id`; a separate `GitLab ↗` action opens the external pipeline.
+Details show only persisted jobs, group them by their actual stage names, and
+mark `tracked_only` when registration restricted the job-name list.
 GitLab's retained jobs snapshot does not include the declared CI stage list.
-The detail view therefore groups stage names alphabetically for a stable
-diagnostic view and does not present that grouping as execution order.
-Detail и mutation routes продолжают использовать существующие backend-контракты.
-`Products` является единственной основной вкладкой product inventory и ASOC
-mapping. Синхронизация получает ASOC product cards и сопоставляет их с
-monitored Product по нормализованным точным GitLab URL из описания ASOC
-продукта (`.git`, регистр и завершающий `/` не меняют идентичность). Состав
-ASOC-репозитория не используется как источник связи, а slug хранится только
-для внешнего контекста. Число repositories в этой проекции — число GitLab
-ссылок, найденных в описании, а не размер ASOC membership.
-Registry сохраняет ASOC-only и ScanOps-only строки и различает `mapped`,
-`partial`, `conflict`, `missing_target` и `no_repositories`. Карточки, удалённые
-из ASOC, остаются в квартальной истории с исходной датой подключения, но не
-считаются активными в каталоге. Конфликтные карточки не публикуют target-связи
-как однозначный mapping. Ручная синхронизация (единственная, что может
-подтвердить массовое удаление) требует same-origin UI Basic-auth; CI Bearer её
-запускать не может. Плановая синхронизация в pipeline worker от UI-auth не
-зависит и карточки никогда не удаляет: снимок с удалениями ждёт ручной
-синхронизации. Последний успешный
-pipeline — максимум terminal timestamp только среди retained
-`ActivePipeline.status=completed`; более новый failed pipeline его не заменяет.
-Переход открывает неизменённый `/pipelines?product=<local id>`.
-Квартальная отчётность живёт в самом реестре. Дата подключения продукта —
-дата создания ASOC-карточки (`created`) в `UI_TIMEZONE`, а не дата первой
-синхронизации: карточка может появиться в ASOC раньше, чем ScanOps увидит её
-GitLab-группу, и такое ожидание показывается отдельно (`waiting N days`,
-`overdue` после `PRODUCT_SYNC_GRACE_DAYS`) — только пока ScanOps ни разу не
-связал карточку (нет даты связи и нет связанной группы); связанная карточка,
-позже деградировавшая, ожидающей не считается, а связанная до появления
-отслеживания дат показывается как «Unknown · linked before date tracking». Срез `period=YYYY-QN&mode=new`
-показывает продукты, подключённые в квартале, `mode=total` — все, подключённые
-к концу квартала, включая удалённые из ASOC позже. Сводка статусов не зависит
-от фильтра статуса, а XLSX (`/api/ui/products/export.xlsx`) строится из той же
-проекции, что и таблица. Покрытие репозиториев берётся из GitLab-аудита всех
-проектов группы, поэтому видны и репозитории, ни разу не приславшие security
-job. Карточка открывает `/targets/products/asoc/{asoc_id}`, GitLab-группа без
-карточки — `/targets/products/{id}`. Pipeline worker синхронизирует ASOC каждые
-`ASOC_PRODUCT_SYNC_INTERVAL_MINUTES` минут и записывает исход последней
-попытки; снимок, который удалил бы хоть одну карточку, он не применяет —
-такой снимок ждёт ручной синхронизации.
-`/reports`, `/reports/operator` и `/reports/export.xlsx` отвечают `308` на
-реестр и его выгрузку, переводя `year` + `quarter` в `period`.
-Canonical Overview обрабатывает timeframe на `/`; старый
-`/overview/operator?timeframe=today` только сохраняет query при `308` redirect на
-`/?timeframe=today`. Внутри Signal Control переход к Overview сохраняет
-прежние timeframe/tool controls, а Back возвращает в Signal Control. Attention
-queue Overview включает существующий
-`IacService.dashboard()` backlog `critical + high`, без отдельной формулы.
-Overview success rate считается только по terminal GitLab pipelines за
-текущий UTC-день: `completed / (completed + failed)`. Числитель, знаменатель и
-окно `Today` показаны рядом с процентом. Attention queue — отдельный текущий
-backlog, который может включать нерешённые сигналы из более ранних периодов и
-поэтому не является знаменателем этого процента.
+Stage names are therefore grouped alphabetically for a stable diagnostic view;
+this grouping does not represent execution order. Detail and mutation routes
+continue to use existing backend contracts.
 
-Unfiltered legacy `/audit` по-прежнему перенаправляется на канонический
-`/coverage`. Если legacy URL содержит `only_problems`,
-`selected_product_ids`, `status`, `status_filter` или `run_id`, он
-перенаправляется на `/coverage/operator` с теми же query parameters, потому
-что только operator workspace реализует этот полный фильтрационный контракт.
-Canonical IaC содержит прямой переход к полному списку
-`/iac/repositories`.
+### Product registry and ASOC mapping
 
-Переходы внутри workspace обновляют browser history. Быстрый переход по
-разделам открывается кнопкой `Quick action` или сочетанием `⌘K` / `Ctrl+K`.
+Products is the primary inventory and ASOC mapping view. Synchronization reads
+ASOC product cards and matches monitored products by normalized exact GitLab
+URLs in the ASOC description. Case, `.git` and a trailing slash do not change
+identity. ASOC repository membership does not establish the link; the slug is
+external context only. Repository counts in this projection count GitLab links
+in descriptions, not ASOC membership.
 
-На экранах до 780 px primary navigation закрепляется снизу как горизонтальная
-лента с подписями; активный раздел автоматически попадает в видимую область.
-Все видимые кнопки, ссылки и поля ввода получают touch-target не меньше 44 px.
-В master-detail разделах `Executions` и
-`Failed jobs` выбор строки раскрывает и прокручивает соответствующую detail
-панель, а длинный список остаётся в собственном ограниченном scroll-контейнере.
+The registry retains ASOC-only and ScanOps-only rows and distinguishes `mapped`,
+`partial`, `conflict`, `missing_target` and `no_repositories`. Cards removed from
+ASOC retain their original connection date in quarterly history but are not
+active inventory. Conflicting cards do not publish an unambiguous target mapping.
+Manual synchronization is the only path that can confirm bulk removal. It
+requires same-origin operator Basic auth and cannot be invoked by a CI bearer.
+Scheduled pipeline-worker synchronization is independent of UI authentication
+and never removes cards: any snapshot containing removals waits for manual sync.
+The last successful pipeline is the maximum terminal timestamp among retained
+`ActivePipeline.status=completed` rows; a newer failed pipeline does not replace
+it. The drill-down remains `/pipelines?product=<local id>`.
 
-`Products` и `Repositories` намеренно разделены:
+Quarterly reporting belongs to the registry. The product connection date is the
+ASOC card's `created` time in `UI_TIMEZONE`, not its first synchronization time.
+A card can precede discovery of its GitLab group. `waiting N days` and `overdue`
+after `PRODUCT_SYNC_GRACE_DAYS` apply only while the card has never been linked:
+there is neither a link date nor a linked group. A previously linked card that
+later degrades is not waiting. Cards linked before date tracking show
+`Unknown · linked before date tracking`.
 
-- Карточка продукта (`/targets/products/asoc/{asoc_id}`) и страница группы
-  (`/targets/products/{id}`) показывают ссылки ASOC-карточки и их состояние
-  синхронизации, репозитории групп со статусом сканирования, pipelines и
-  ASOC deliveries; operator workbench (`/targets/products/{id}/operator`)
-  сохраняет обслуживание продукта и control bindings.
-- `Browse repositories` сохраняет product filter в URL.
-- Repository 360 показывает ownership, coverage, execution timeline,
-  normalized artifacts, delivery evidence и producer versions.
+`period=YYYY-QN&mode=new` selects products connected during the quarter;
+`mode=total` selects all connected by quarter end, including cards removed later.
+The status summary does not depend on the status filter. XLSX export at
+`/api/ui/products/export.xlsx` uses the same projection as the table. Repository
+coverage comes from a GitLab audit of every project in the group, including
+repositories that have never sent a security job.
+Cards open `/targets/products/asoc/{asoc_id}`; groups without a card open
+`/targets/products/{id}`. Pipeline-worker synchronization runs every
+`ASOC_PRODUCT_SYNC_INTERVAL_MINUTES` and records the latest attempt. A snapshot
+that would remove even one card is not applied automatically.
+`/reports`, `/reports/operator` and `/reports/export.xlsx` return `308` redirects
+to the registry/export, converting `year` and `quarter` into `period`.
 
-В `Integrations` каталог и настройки остаются в одном визуальном и
-навигационном контексте:
+### Overview and compatibility routes
 
-- выбор connector открывает правую settings-панель, не покидая `/integrations`;
-- ASOC, PT AI и Mattermost показывают реальные поля конфигурации;
-- GitLab показывает список connections и только один editor за раз;
-- secret-поля являются write-only и никогда не возвращаются в UI API;
-- `Save changes` оставляет панель открытой, после чего можно выполнить
-  `Test connection`;
-- при несохранённых изменениях закрытие и переключение требуют подтверждения;
-- параметры `integration` и `instance` делают выбранное состояние доступным по
-  прямой ссылке и сохраняют browser history.
-- тест Mattermost явно предупреждает, что отправит одно видимое тестовое
-  сообщение в настроенный канал.
+Canonical Overview handles timeframes at `/`.
+`/overview/operator?timeframe=today` redirects with `308` to `/?timeframe=today`,
+preserving the query. Workspace navigation preserves timeframe/tool controls,
+and browser Back returns to the previous workspace state. The attention queue
+uses the existing `IacService.dashboard()` `critical + high` backlog.
+The documented pipeline success-rate projection counts terminal GitLab pipelines
+for the current UTC day: `completed / (completed + failed)`. Numerator,
+denominator and the `Today` window appear beside the percentage. Attention is a
+separate current backlog that may include unresolved signals from older periods;
+it is not the denominator of that rate.
+
+Unfiltered legacy `/audit` redirects to `/coverage`. With `only_problems`,
+`selected_product_ids`, `status`, `status_filter` or `run_id`, it redirects to
+`/coverage/operator` with the same query parameters, because that workbench
+implements the complete legacy filter contract. Canonical IaC links directly
+to `/iac/repositories`.
+
+Workspace navigation updates browser history. Quick action opens by button or
+`⌘K` / `Ctrl+K`. Existing narrow-screen styles below 780 px place labelled
+primary navigation at the bottom and bring the active section into view;
+visible controls have at least 44 px touch targets. In the Executions and Failed
+jobs master/detail views, selecting a row reveals and scrolls to its detail panel
+while the long list retains its own bounded scroll container. Supported product
+acceptance widths are defined in the verification section below.
+
+### Products, repositories and integration settings
+
+Products and Repositories have distinct responsibilities:
+
+- Product cards (`/targets/products/asoc/{asoc_id}`) and group pages
+  (`/targets/products/{id}`) show ASOC links and synchronization, repository scan
+  states, pipelines and ASOC deliveries. `/targets/products/{id}/operator`
+  retains product maintenance and control bindings.
+- Browse repositories preserves the product filter in the URL.
+- Repository 360 shows ownership, coverage, execution timelines, normalized
+  artifacts, delivery evidence and producer versions.
+
+Integration browsing and configuration stay within one workspace:
+
+- Selecting a connector opens the right settings panel without leaving
+  `/integrations`.
+- ASOC, PT AI and Mattermost expose their configuration fields. GitLab lists
+  connections and opens only one editor at a time.
+- Secret fields are write-only and never returned by the UI API.
+- Save changes keeps the panel open so Test connection can follow.
+- Closing or switching with unsaved changes requires confirmation.
+- `integration` and `instance` parameters make the selection addressable and
+  preserve browser history.
+- Mattermost connection testing explicitly warns that it sends one visible
+  test message to the configured channel.
 
 ## Live data contracts
 
-Workspace использует следующие authenticated GET endpoints:
+The workspace uses authenticated GET endpoints:
 
-| Endpoint | Назначение |
-|---|---|
-| `/api/ui/overview` | operational signal, topology, attention queue, throughput |
-| `/api/ui/executions` | durable execution lifecycle и artifacts с `25`/`50`/`100` pagination |
-| `/api/ui/failed-jobs` | unresolved failed job evidence |
-| `/api/ui/job-journal` | filtered job journal, `25`/`50`/`100` pagination, autocomplete options и summary |
-| `/api/ui/pipelines` | active/observed GitLab pipeline lifecycle с `25`/`50`/`100` pagination |
-| `/api/ui/pipelines/{active_pipeline_id}` | persisted pipeline header, completeness, ordered stages, jobs and external links |
-| `/api/ui/config-guard` | configuration scans и server-paginated findings (`25`/`50`/`100`) |
-| `/api/ui/iac` | IaC runs, severities и persisted scanner details |
-| `/api/ui/ptai` | PT AI runs и фактический scanner state с `25`/`50`/`100` pagination |
-| `/api/ui/coverage` | product audit coverage и control bindings |
-| `/api/ui/products` | квартальный реестр ASOC-карточек, сводка статусов, GitLab-группы без карточки |
-| `/api/ui/products/widgets/{asoc_id}`, `/api/ui/products/targets/{id}` | drill-down карточки или группы: ссылки, репозитории, pipelines, ASOC deliveries |
-| `/api/ui/products/export.xlsx` | XLSX того же среза, что и таблица |
-| `/api/ui/repositories` | repository inventory с batch-calculated health, server-side `q`/`product` filters и `25`/`50`/`100` pagination; bounded legacy `limit<=1000` остаётся совместимым |
-| `/api/ui/repositories/{id}` | Repository 360 |
-| `/api/ui/scanner-fleet` | worker heartbeats и capacity |
-| `/api/ui/integrations` | безопасная конфигурационная метаинформация, connection counts и агрегированное connector health |
+| Endpoint | Purpose |
+| --- | --- |
+| `/api/ui/overview` | Operational signal, topology, attention queue and throughput. |
+| `/api/ui/executions` | Durable execution lifecycle and artifacts; `25`/`50`/`100` pagination. |
+| `/api/ui/failed-jobs` | Unresolved failed-job evidence. |
+| `/api/ui/job-journal` | Filtered job journal, pagination, autocomplete options and summary. |
+| `/api/ui/pipelines` | Active/observed GitLab pipeline lifecycle; `25`/`50`/`100` pagination. |
+| `/api/ui/pipelines/{active_pipeline_id}` | Persisted header, completeness, ordered stages, jobs and external links. |
+| `/api/ui/config-guard` | Configuration scans and server-paginated findings. |
+| `/api/ui/iac` | IaC runs, severities and persisted scanner details. |
+| `/api/ui/ptai` | PT AI runs and actual scanner state; `25`/`50`/`100` pagination. |
+| `/api/ui/coverage` | Product audit coverage and control bindings. |
+| `/api/ui/products` | Quarterly ASOC card registry, status summary and groups without cards. |
+| `/api/ui/products/widgets/{asoc_id}`, `/api/ui/products/targets/{id}` | Card/group drill-down: links, repositories, pipelines and ASOC deliveries. |
+| `/api/ui/products/export.xlsx` | XLSX for the same slice as the table. |
+| `/api/ui/repositories` | Repository inventory, batch-calculated health, server-side `q`/`product` filters and `25`/`50`/`100` pagination; bounded legacy `limit<=1000` remains supported. |
+| `/api/ui/repositories/{id}` | Repository 360. |
+| `/api/ui/scanner-fleet` | Worker heartbeats and capacity. |
+| `/api/ui/integrations` | Safe configuration metadata, connection counts and aggregate connector health. |
 
-Коллекции обновляются автоматически. Loading, empty и error состояния являются
-явными; отсутствие scanner evidence не превращается в выдуманный root cause.
-Read-only карточки не маскируются под кнопки. Все действия, которых нет в
-Signal Control API, ведут в существующий канонический или operator workbench,
-включая `/targets/operator` для product maintenance.
+Collections refresh automatically. Loading, empty and error states are explicit;
+missing scanner evidence is not replaced with an invented root cause. Read-only
+cards do not masquerade as buttons. Actions outside the Signal Control API open
+the existing canonical or operator workbench, including `/targets/operator` for
+product maintenance.
 
-Integration settings используют существующие POST-контракты
+Integration settings use existing POST contracts:
 `/integrations/{key}/save`, `/integrations/{key}/test`,
-`/integrations/{key}/disable` и
-`/integrations/gitlab/instances/...`. Ответ обрабатывается внутри workspace:
-перехода в legacy-интерфейс после действия нет. `/api/ui/integrations` не
-возвращает PAT, tokens или сохранённые secret values.
+`/integrations/{key}/disable` and `/integrations/gitlab/instances/...`.
+Responses are handled inside the workspace without navigating to a legacy UI.
+`/api/ui/integrations` never returns PATs, tokens or stored secret values.
 
-## Проверка
+## Verification
 
 Focused interaction suite:
 
@@ -216,9 +209,9 @@ QA_WORKERS=2 \
 npx playwright test qa/e2e/signal-control.spec.ts
 ```
 
-Полный visual/accessibility audit разделов и integration settings запускается
-на двух поддерживаемых desktop-ширинах: 1920 и 1440 px. Более узкие tablet и
-mobile layouts не входят в продуктовый контракт:
+The full visual/accessibility audit of sections and integration settings runs
+at the two supported desktop widths: 1920 and 1440 px. Narrower tablet and mobile
+layouts are outside the product contract:
 
 ```bash
 QA_BASE_URL=http://127.0.0.1:18081 \
@@ -228,6 +221,5 @@ QA_ARTIFACTS_DIR=qa/artifacts/signal-control \
 npx playwright test qa/e2e/exploratory.spec.ts
 ```
 
-Проверять нужно не только exit code, но и `findings.json`: release candidate не
-должен содержать P0/P1 findings, runtime/network errors, horizontal overflow
-или текст меньше 12 px.
+Inspect `findings.json` as well as the exit code. A release candidate must have
+no P0/P1 findings, runtime/network errors, horizontal overflow or text below 12 px.
