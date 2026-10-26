@@ -65,7 +65,7 @@ def test_viewport_matrix_covers_supported_desktop_widths():
     assert "Narrow-tablet and mobile layouts are outside the product" in qa_docs
     assert "1920×1080" in qa_docs
     assert "1440×1000" in qa_docs
-    assert "desktop-ширинах: 1920 и 1440 px" in signal_control_docs
+    assert "desktop widths: 1920 and 1440 px" in signal_control_docs
     assert "1920/1440/1280/1024/768" not in readme
     assert "1920, 1440, 1280, 1024, 768" not in signal_control_docs
 

@@ -16,6 +16,9 @@ short-lived release branch and a reviewed PR into main for releases, then merge
 that exact main state back into develop without squash. Never rewrite shared
 history or bypass repository protections.
 
+Write public documentation in English. Keep the README focused on the product,
+quickstart and links to detailed guides.
+
 ## Local validation
 
 Use Python 3.12, Node 22.13 or newer in the Node 22 line, Docker Compose, and Git.
@@ -80,4 +83,4 @@ Deployments own their registry, CI and credentials outside this repository. The
 optional scripts/sync_internal_release.sh flow exports an exact tagged main
 snapshot while preserving destination-owned files. Always pass the source
 remote explicitly (normally --remote origin). Test an export in a disposable
-checkout before using it in a private environment; see [the operator reference](docs/operations-reference.ru.md) for details.
+checkout before using it in a private environment; see [the operator reference](docs/operations-reference.md) for details.
