@@ -16,8 +16,9 @@ out = Path(sys.argv[1])
 raw_paths = subprocess.check_output(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard']).split(b'\0')
 # Content scanners do not inspect names, including names deleted from history.
 refs = subprocess.check_output(['git', 'for-each-ref', '--format=%(refname)'])
+has_head = subprocess.run(['git', 'rev-parse', '--verify', 'HEAD'], capture_output=True).returncode == 0
 historical = (subprocess.check_output(['git', 'log', '--all', '--format=', '--name-only', '--no-renames', '-z']).split(b'\0')
-              if refs.strip() else [])
+              if refs.strip() or has_head else [])
 try:
     names = [raw.decode('utf-8') for raw in [*raw_paths, *historical] if raw]
 except UnicodeError:
