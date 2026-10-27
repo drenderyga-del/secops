@@ -52,6 +52,8 @@ are never replaced. A nonzero exit means the candidate is blocked.
 4. Applies configured literal replacements to text. It then applies the source
    delta with three-way comparison, retaining independent public changes.
    Conflicts, including deletion of a publicly modified file, block the export.
+   Case-folded/Unicode-equivalent filename and directory aliases also block
+   preparation before files can overwrite one another.
 5. Preserves the public README, contributor/agent instructions, license and
    GitHub workflows, and public secret-scanning policy/scripts. Source changes
    to these are recorded for manual review.

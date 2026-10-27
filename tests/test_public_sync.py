@@ -177,14 +177,16 @@ def test_incoming_source_cannot_replace_public_secret_scanning_policy(tmp_path, 
     source, public, _ = repos
     (public / 'scripts').mkdir()
     (public / 'scripts/check_public_source.sh').write_text('#!/bin/sh\nexit 1\n')
+    (public / 'scripts/public_scan_policy.py').write_text('TRUSTED = True\n')
     commit(public)
     (source / '.gitleaks.toml').write_text('[allowlist]\nregexes = [".*"]\n')
     (source / 'scripts').mkdir()
     (source / 'scripts/check_public_source.sh').write_text('#!/bin/sh\nexit 0\n')
+    (source / 'scripts/public_scan_policy.py').write_text('TRUSTED = False\n')
     commit(source)
     result, output, report = run_export(tmp_path, repos)
     assert result.returncode == 0, result.stdout
-    for name in ('.gitleaks.toml', 'scripts/check_public_source.sh'):
+    for name in ('.gitleaks.toml', 'scripts/check_public_source.sh', 'scripts/public_scan_policy.py'):
         assert (output / name).read_bytes() == (public / name).read_bytes()
         assert name in report['preserved_public_paths']
 
@@ -228,7 +230,8 @@ def test_token_in_filename_blocks_before_filename_is_written_to_report(tmp_path,
 
 @pytest.mark.parametrize('name', ['.GIT/config', '.Codex/settings.json', '.AGENTS/state.json',
                                   '.GIT/objects/ab/data', '.Env', 'QA/ARTIFACTS/results.json'])
-def test_case_variant_metadata_paths_are_rejected_without_touching_filesystem(name):
+def test_case_variant_metadata_paths_are_rejected_without_touching_filesystem(name, monkeypatch):
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
     import runpy
     assert runpy.run_path(str(SCRIPT))['excluded'](name)
 
@@ -248,3 +251,47 @@ def test_replacement_rules_must_be_private_external_regular_file(tmp_path, repos
     result, output, report = run_export(tmp_path, repos, extra=('--rules', str(path)))
     assert result.returncode == 1 and report['error'] == 'use_private_external_rules'
     assert not output.exists()
+
+
+def _commit_index_only_files(repo, names):
+    # mktree bypasses macOS/core.precomposeUnicode filename normalization.
+    raw = subprocess.check_output(['git', '-C', str(repo), 'ls-tree', '-z', 'HEAD'])
+    for index, name in enumerate(names):
+        oid = subprocess.check_output(['git', '-C', str(repo), 'hash-object', '-w', '--stdin'],
+                                      input=f'variant = {index}\n'.encode()).decode().strip()
+        if '/' in name:
+            git(repo, 'update-index', '--add', '--cacheinfo', f'100644,{oid},{name}')
+        else:
+            raw += f'100644 blob {oid}\t{name}\0'.encode()
+    if any('/' in name for name in names):
+        # This fixture exercises a case-distinct file/directory collision.
+        for index, name in enumerate(names):
+            if '/' not in name:
+                oid = subprocess.check_output(['git', '-C', str(repo), 'hash-object', '-w', '--stdin'],
+                                              input=f'variant = {index}\n'.encode()).decode().strip()
+                git(repo, 'update-index', '--add', '--cacheinfo', f'100644,{oid},{name}')
+        git(repo, 'commit', '-qm', 'Index-only path fixture')
+    else:
+        tree = subprocess.check_output(['git', '-C', str(repo), 'mktree', '-z'], input=raw).decode().strip()
+        head = git(repo, 'commit-tree', tree, '-p', 'HEAD', '-m', 'Tree-only path fixture')
+        git(repo, 'update-ref', 'HEAD', head)
+
+
+@pytest.mark.parametrize('names', [('Feature.py', 'feature.py'), ('caf\u00e9.py', 'cafe\u0301.py'),
+                                  ('Alias', 'alias/child.py')])
+def test_source_case_and_unicode_path_collisions_block_before_writes(tmp_path, repos, names):
+    source, public, _ = repos
+    _commit_index_only_files(source, names)
+    result, output, report = run_export(tmp_path, repos)
+    assert result.returncode == 1 and report['error'] == 'path_collision'
+    assert not output.exists()
+
+
+def test_assembled_delta_cannot_alias_independent_public_file(tmp_path, repos):
+    source, public, _ = repos
+    (public / 'Feature.py').write_text('public_only = True\n'); commit(public)
+    _commit_index_only_files(source, ['feature.py'])
+    result, output, report = run_export(tmp_path, repos)
+    assert result.returncode == 1 and report['error'] == 'path_collision'
+    assert not output.exists()
+    assert (public / 'Feature.py').read_text() == 'public_only = True\n'

@@ -75,13 +75,13 @@ _CREDENTIAL_PATH_KEYS = {
     "xsrftoken",
 }
 _KNOWN_TOKEN_SEGMENT_RE = re.compile(
-    r"^(?:glpat|glrt|glcbt|gldt|glsoat|gloas|glagent|glft|glptt)[-_][a-z0-9_-]{12,}$"
-    r"|^github_pat_[a-z0-9_]{20,}$"
-    r"|^gh[pousr]_[a-z0-9]{20,}$"
-    r"|^xox[baprs]-[a-z0-9-]{12,}$",
+    r"(?:glpat|glrt|glcbt|gldt|glsoat|gloas|glagent|glft|glptt)[-_][a-z0-9_-]{12,}"
+    r"|github_pat_[a-z0-9_]{20,}"
+    r"|gh[pousr]_[a-z0-9]{20,}"
+    r"|xox[baprs]-[a-z0-9-]{12,}",
     re.IGNORECASE,
 )
-_JWT_SEGMENT_RE = re.compile(r"^eyj[a-z0-9_-]{8,}\.eyj[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}$", re.IGNORECASE)
+_JWT_SEGMENT_RE = re.compile(r"eyj[a-z0-9_-]{8,}\.eyj[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}", re.IGNORECASE)
 _HEX_SECRET_SEGMENT_RE = re.compile(r"^[a-f0-9]{32,}$", re.IGNORECASE)
 _UUID_SEGMENT_RE = re.compile(
     r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
@@ -100,8 +100,8 @@ def _looks_like_token_segment(segment: str) -> bool:
     if not candidate or _UUID_SEGMENT_RE.fullmatch(candidate):
         return False
     if (
-        _KNOWN_TOKEN_SEGMENT_RE.fullmatch(candidate)
-        or _JWT_SEGMENT_RE.fullmatch(candidate)
+        _KNOWN_TOKEN_SEGMENT_RE.search(candidate)
+        or _JWT_SEGMENT_RE.search(candidate)
         or _HEX_SECRET_SEGMENT_RE.fullmatch(candidate)
     ):
         return True

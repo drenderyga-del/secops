@@ -167,6 +167,9 @@ def test_logs_template_only_links_safe_persisted_pipeline_urls(job_db, monkeypat
         '%3Fprivate_token%3D' + 'glpat-' + 'a' * 20,
         ';download=' + 'glpat-' + 'a' * 20,
         '%253Fprivate_token%253Dhidden',
+        ';download=prefix-glpat-' + 'a' * 20,
+        '/prefix-glpat-' + 'a' * 20,
+        '/glpat-' + 'a' * 20 + '.json',
     )],
 ])
 def test_evidence_link_rejects_credential_shaped_path_and_host(value):

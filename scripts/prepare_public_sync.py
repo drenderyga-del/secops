@@ -34,16 +34,12 @@ EXCLUDED_PATHS = (
     'scripts/gitlab_mr_gate.py', 'tests/test_gitlab_mr_gate.py',
 )
 PUBLIC_OWNED = ('README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'LICENSE', '.github/*',
-                '.gitleaks.toml', 'scripts/check_public_source.sh')
+                '.gitleaks.toml', 'scripts/check_public_source.sh',
+                'scripts/prepare_public_sync.py', 'scripts/public_scan_policy.py')
 
 
-# Low-entropy token filenames must also fail the path-manifest scan.
-PATH_SCANNER_RULE = br"""
-[[rules]]
-id = "public-filename-credential"
-description = "Credential-shaped filename"
-regex = '''(?i)(?:glpat|glrt|glcbt|gldt|glsoat|gloas|glagent|glft|glptt)[-_][a-z0-9_-]{12,}|github_pat_[a-z0-9_]{20,}|gh[pousr]_[a-z0-9]{20,}|xox[baprs]-[a-z0-9-]{12,}|(?:private[_-]?token|access[_-]?token|api[_-]?key|password|secret)[=:][^/\s]{4,}'''
-"""
+from public_scan_policy import PATH_SCANNER_RULE, has_path_collisions
+
 
 class ExportBlocked(Exception):
     pass
@@ -92,6 +88,8 @@ def tree(repo: Path, ref: str, exclusions=()) -> tuple[dict, list[str]]:
         if kind != 'blob' or mode not in {'100644', '100755'}:
             raise ExportBlocked('symlink_or_submodule')
         records.append((path, mode, oid))
+    if has_path_collisions(path for path, _, _ in records):
+        raise ExportBlocked('path_collision')
     # One batch process avoids launching Git once per source file.
     payload = git(repo, 'cat-file', '--batch', input_bytes=''.join(oid + '\n' for _, _, oid in records).encode())
     entries = {}; offset = 0
@@ -243,6 +241,8 @@ def prepare(source: Path, base_ref: str, source_ref: str, public: Path,
                     updated.append(path)
                     continue
             conflicts.append(path)
+        if has_path_collisions(result):
+            raise ExportBlocked('path_collision')
         report.update(updated_paths=updated, removed_paths=removed,
                       preserved_public_paths=kept, conflicts=conflicts)
         if conflicts:

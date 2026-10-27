@@ -349,7 +349,10 @@ def test_target_360_template_exposes_end_to_end_operator_context():
 @pytest.mark.parametrize('origin', ['report', 'detail', 'pipeline'])
 @pytest.mark.parametrize('suffix', ['?private_token=' + 'x' * 32 + '#access_token=hidden',
                                      ';private_token=' + 'glpat-' + 'a' * 20,
-                                     '%3Fprivate_token%3D' + 'glpat-' + 'a' * 20])
+                                     '%3Fprivate_token%3D' + 'glpat-' + 'a' * 20,
+                                     '/prefix-glpat-' + 'a' * 20,
+                                     '/glpat-' + 'a' * 20 + '.json',
+                                     ';download=prefix-glpat-' + 'a' * 20])
 def test_persisted_job_evidence_never_projects_credentials(origin, suffix):
     import json
     db = _session(); product, repository = _target(db)
