@@ -2363,17 +2363,21 @@ function Repositories() {
           {state === "error" && <EmptyState state={state} title="Repository inventory unavailable" copy="The last request could not be completed." onRetry={retry} />}
           {state === "ready" && !rows.length && <EmptyState state={state} title={data?.total ? "No repositories match" : "No repositories discovered"} copy={data?.total ? "Adjust the search while keeping the current product scope." : "Repositories appear after the first GitLab project signal is ingested."} />}
           {!!rows.length && <div className="repository-table">
-          <div className="repository-table-head"><span>Repository</span><span>Product</span><span>Current job-key health</span><span>Control bindings</span><span>Last signal</span><span>Status</span><span>Actions</span></div>
+          <div className="repository-table-head"><span>Repository</span><span>Product</span><span>Current job-key health</span><span>Control bindings</span><span>Last signal</span><span>Health</span><span>Actions</span></div>
           {rows.map((item) => {
             const coverage = item.coverage.expected ? Math.round(item.coverage.configured / item.coverage.expected * 100) : 0;
             const tone = item.job_health_broken ? "failed" : item.job_health_total ? "healthy" : "unknown";
             return <div className="repository-row" key={item.id}>
               <a className="repository-identity" href={item.href}><span className={`target-beacon ${tone}`}><i /></span><span><strong>{item.path}</strong><small>Repository #{item.id}</small></span></a>
               <a className="repository-product" href={`/targets/products/${item.product_id}`}>{item.product ?? "Unassigned product"}</a>
-              <span className="repository-stat"><strong>{item.job_health_total ? `${item.success_rate}%` : "—"}</strong><small>{item.job_health_healthy} healthy · {item.job_health_broken} broken keys</small></span>
+              <span className="repository-stat"><strong>{item.job_health_total ? `${item.success_rate}%` : "—"}</strong><small>{item.job_health_healthy} healthy · {item.job_health_broken} unresolved failures</small>{item.job_health_broken > 0 && <a href={`/repos/${item.id}/jobs?only_failed=true&status=failed&timeframe=all`}>View unresolved jobs ↗</a>}</span>
               <span className="repository-stat"><strong>{item.coverage.configured} / {item.coverage.expected}</strong><small>{item.coverage.missing} missing · {coverage}%</small></span>
               <time dateTime={item.last_report_at ?? undefined}>{relativeTime(item.last_report_at)}</time>
-              <Status value={tone} />
+              <Status
+                value={tone}
+                label={tone === "failed" ? "Needs review" : undefined}
+                title={tone === "failed" ? "At least one job and ref has an unresolved failure; this does not mean the latest pipeline failed." : undefined}
+              />
               <span className="repository-actions"><a href={item.href}>Repository 360</a><a href={`/repos/${item.id}/jobs`}>Jobs</a><a href={`/executions?repository=${item.id}`}>Executions</a></span>
             </div>;
           })}

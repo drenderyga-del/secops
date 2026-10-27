@@ -13,6 +13,7 @@
             <p>Controls, freshness and end-to-end execution evidence for {{ product.name if product else 'this repository' }}.</p>
         </div>
         <div class="page-actions">
+            {% if gitlab_repository_url %}<a class="btn btn-secondary" href="{{ gitlab_repository_url }}" target="_blank" rel="noopener noreferrer">{{ icons.icon('arrow-up-right', 'icon-sm') }} Open GitLab repository</a>{% endif %}
             {% if product %}<a class="btn btn-secondary" href="{{ product_target_url(product.id) }}">{{ icons.icon('arrow-left', 'icon-sm') }} Open product target</a>{% endif %}
             <a class="btn btn-secondary" href="/repos/{{ repository.id }}/jobs">{{ icons.icon('layers', 'icon-sm') }} View job logs</a>
         </div>
@@ -40,6 +41,31 @@
             <small>Produced / confirmed</small>
         </div>
     </section>
+
+    {% if job_health.broken_keys %}
+    <section class="target360-job-health" aria-labelledby="target-job-health-title">
+        <div class="target360-job-health-heading">
+            <div>
+                <span class="river-label">SECURITY JOB HEALTH</span>
+                <h2 id="target-job-health-title">{{ job_health.broken_keys }} unresolved failed job key{% if job_health.broken_keys != 1 %}s{% endif %}</h2>
+                <p>A key is a job name plus ref. A successful pipeline does not clear a failure from a different job or ref.</p>
+            </div>
+            <a class="btn btn-secondary" href="{{ job_health.failures_href }}">View unresolved jobs</a>
+        </div>
+        {% if job_health.failures_truncated %}<p>Showing the latest {{ job_health.failures_limit }} unresolved job/ref keys. Open the job journal for the complete history.</p>{% endif %}
+        <ul class="target360-job-failures">
+            {% for failure in job_health.failures %}
+            <li>
+                <span><strong>{{ failure.name }}</strong><small>{{ failure.ref or 'ref not reported' }}{% if failure.finished_at %} · failed {{ failure.finished_at|localtime('%Y-%m-%d %H:%M') }}{% endif %}</small></span>
+                <span class="target360-job-failure-links">
+                    {% if failure.job_url %}<a href="{{ failure.job_url }}" target="_blank" rel="noopener noreferrer">Open job ↗</a>
+                    {% elif failure.pipeline_url %}<a href="{{ failure.pipeline_url }}" target="_blank" rel="noopener noreferrer">Open pipeline ↗</a>{% endif %}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
 
     <section class="target360-versions" aria-labelledby="target-versions-title">
         <div>
@@ -111,7 +137,7 @@
                         <h3>{{ execution.correlation_key }}</h3>
                         <p>Requested <time datetime="{{ execution.requested_at or '' }}">{{ execution.requested_at|localtime('%Y-%m-%d %H:%M') if execution.requested_at else '—' }}</time></p>
                     </div>
-                    <span class="status-badge {{ 'success' if execution.status == 'succeeded' else 'error' if execution.status == 'failed' else 'running' if execution.status in ['running', 'delivering'] else 'warning' }}">{{ execution.status }}</span>
+                    <span class="target360-execution-actions">{% if execution.gitlab_url %}<a href="{{ execution.gitlab_url }}" target="_blank" rel="noopener noreferrer">Open pipeline ↗</a>{% endif %}<span class="status-badge {{ 'success' if execution.status == 'succeeded' else 'error' if execution.status == 'failed' else 'running' if execution.status in ['running', 'delivering'] else 'warning' }}">{{ execution.status }}</span></span>
                 </header>
 
                 {% if execution.failure_category or execution.failure_reason %}

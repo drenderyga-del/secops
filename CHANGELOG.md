@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Load repository pipeline links only for visible evidence and compute exact
+  all-history duration summaries in SQL without loading historical payloads.
+
+- Import upstream fixes for stale long-running alerts, repository failure
+  evidence, exact-instance search and retained-history drill-downs.
+- Strip credentials from persisted evidence links, bound repository failure
+  queries, limit migration lock waits and serialize sync-outcome updates.
+
+- Add reviewed private-to-public snapshot preparation with literal redaction,
+  three-way preservation, secret checks and explicit binary approval.
+
 - Translate the remaining public documentation into English and rename the
   operator reference without a language suffix.
 
@@ -25,8 +36,6 @@
 - Make product-directory reference hosts an explicit deployment allowlist.
 - Document private vulnerability reporting and reproducible secret scans.
 
-
-## Unreleased
 
 - Turned Products into the quarterly ASOC product registry: a product is
   connected when its ASOC card is created, each card shows its GitLab sync

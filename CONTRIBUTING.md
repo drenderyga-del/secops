@@ -84,3 +84,9 @@ optional scripts/sync_internal_release.sh flow exports an exact tagged main
 snapshot while preserving destination-owned files. Always pass the source
 remote explicitly (normally --remote origin). Test an export in a disposable
 checkout before using it in a private environment; see [the operator reference](docs/operations-reference.md) for details.
+
+## Private-to-public synchronization
+
+Use the [public synchronization guide](docs/public-sync.md) to prepare reviewed
+source updates without importing private history or overwriting public-only work.
+Keep organization-specific rules and export reports outside Git.

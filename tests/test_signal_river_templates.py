@@ -294,7 +294,7 @@ def test_dashboard_outcome_context_uses_a_full_row_instead_of_overflowing():
     assert "font-size: clamp(2.5rem, 5cqi, 4.25rem);" in source
     assert "grid-template-columns: minmax(130px, auto) auto minmax(160px, 1fr);" not in source
     assert "tokens.css?v=20260727-signal-control-palette-1" in base
-    assert "signal-river.css?v=20260923-asoc-product-lifecycle-1" in base
+    assert "signal-river.css?v=20261014-repository-job-evidence-1" in base
     assert "signal-control.css?v=20260923-asoc-product-lifecycle-1" in base
 
 
@@ -545,7 +545,7 @@ def test_base_busts_cached_assets_after_local_navigation_removal():
     base = open("app/templates/base.html", encoding="utf-8").read()
 
     assert "/static/css/style.css?v=20260730-local-toc-removal-1" in base
-    assert "/static/css/signal-river.css?v=20260923-asoc-product-lifecycle-1" in base
+    assert "/static/css/signal-river.css?v=20261014-repository-job-evidence-1" in base
     assert "/static/css/signal-control.css?v=20260923-asoc-product-lifecycle-1" in base
     assert "/static/js/main.js?v=20260805-filter-surface-2" in base
 

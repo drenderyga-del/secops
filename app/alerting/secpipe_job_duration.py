@@ -12,6 +12,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..models import ActivePipeline, PipelineJob, Product, Repository, SessionLocal
+from ..models.pipeline import PipelineStatus
 from .notifications import notify_long_running_job
 from ..integration_settings import runtime_setting
 
@@ -83,15 +84,27 @@ def find_long_running_pipeline_jobs(
 ) -> List[Tuple[PipelineJob, ActivePipeline, Repository, Product]]:
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=threshold_minutes)
+    try:
+        poll_interval_seconds = max(0, int(os.getenv("PIPELINE_POLL_INTERVAL_SECONDS", "300")))
+    except ValueError:
+        poll_interval_seconds = 300
+    # Job status is only trustworthy while the pipeline poller has observed
+    # that exact GitLab job recently. Give the poller at least 15 minutes (or
+    # three configured poll intervals) to recover before suppressing alerts.
+    observation_cutoff = now - timedelta(seconds=max(15 * 60, poll_interval_seconds * 3))
     status_lower = func.lower(PipelineJob.status)
     query = (
         db.query(PipelineJob, ActivePipeline, Repository, Product)
         .join(ActivePipeline, ActivePipeline.id == PipelineJob.active_pipeline_id)
         .join(Repository, Repository.id == ActivePipeline.repository_id)
         .join(Product, Product.id == ActivePipeline.product_id)
+        # A pipeline that stopped being polled must not keep producing alerts
+        # from its last observed (possibly stale) running job status.
+        .filter(ActivePipeline.status.in_((PipelineStatus.REGISTERED, PipelineStatus.POLLING)))
         .filter(status_lower.in_(tuple(_IN_PROGRESS_STATUSES)))
         .filter(PipelineJob.started_at.isnot(None))
         .filter(PipelineJob.started_at <= cutoff)
+        .filter(PipelineJob.last_seen_at >= observation_cutoff)
     )
     if resend_minutes > 0:
         # Re-alert mode: send again if last alert was more than resend_minutes ago.

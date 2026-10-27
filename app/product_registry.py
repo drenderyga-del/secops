@@ -53,7 +53,7 @@ from .models import (
     Product,
     Repository,
 )
-from .url_safety import safe_external_http_url
+from .url_safety import safe_external_http_url, safe_evidence_http_url
 
 REGISTRY_MODES = ("new", "total")
 SCOPE_FILTERS = ("all", "internal", "external", "unclassified", "conflict")
@@ -420,7 +420,7 @@ class _Evidence:
             row = stats[pipeline.repository_id]
             row["last_status"] = _status_value(pipeline.status)
             row["last_at"] = _pipeline_terminal_value(pipeline)
-            row["last_url"] = safe_external_http_url(pipeline.web_url)
+            row["last_url"] = safe_evidence_http_url(pipeline.web_url)
 
         for repository_id, value in (
             self.db.query(ActivePipeline.repository_id, func.max(terminal_at))
@@ -442,16 +442,19 @@ def _pipeline_terminal_value(pipeline: ActivePipeline) -> Optional[datetime]:
 
 def _repository_inventory(evidence: _Evidence, group_ids: Iterable[int]) -> list[dict[str, Any]]:
     """Union of audited GitLab repositories and ScanOps repositories for groups."""
-    inventory: dict[str, dict[str, Any]] = {}
+    inventory: dict[tuple[str, str], dict[str, Any]] = {}
     for group_id in group_ids:
         product = evidence.products.get(group_id)
         group_path = AuditService.product_group_path(product.path if product else None)
+        group_host = AuditService._extract_host(product.gitlab_base_url if product else None).lower().strip("/")
+        group_host = group_host or f"group:{group_id}"
         for snapshot, audit_repo in evidence.audit_by_product.get(group_id, []):
             path = (audit_repo.path_with_namespace or "").strip("/")
-            key = path.lower()
+            host = AuditService._extract_host(audit_repo.instance_host).lower().strip("/") or group_host
+            key = (host, path.lower())
             # The audit may attribute a project by its top-level namespace only;
             # the registry lists repositories that are inside the product group.
-            if group_path and not path_within(key, group_path):
+            if group_path and not path_within(path.lower(), group_path):
                 continue
             status = _AUDIT_TO_REPO_STATUS.get(snapshot.status, REPO_UNKNOWN)
             if audit_repo.excluded or audit_repo.archived:
@@ -468,7 +471,7 @@ def _repository_inventory(evidence: _Evidence, group_ids: Iterable[int]) -> list
             }
         for repository in evidence.repositories_by_product.get(group_id, []):
             path = (repository.path or "").strip("/")
-            key = path.lower()
+            key = (group_host, path.lower())
             entry = inventory.get(key)
             if entry is None:
                 entry = {
@@ -821,7 +824,7 @@ def _detail_repositories(db: Session, evidence: _Evidence, inventory: list[dict[
                 "last_activity_at": _iso(item["last_pipeline_at"]),
                 "scanops_repository_id": repository_id,
                 "href": f"/targets/repositories/{repository_id}" if repository_id else None,
-                "jobs_href": "/logs?" + urlencode({"repo": item["path"], "status": "failed"}) if repository_id else None,
+                "jobs_href": f"/repos/{repository_id}/jobs?only_failed=true&status=failed&timeframe=all" if repository_id else None,
                 "open_failed_jobs": failed_jobs.get(repository_id, 0) if repository_id else 0,
                 "pipelines": {
                     "completed": completed,

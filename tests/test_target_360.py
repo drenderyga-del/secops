@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -13,6 +15,7 @@ from app.execution_contract import ExecutionStatus, StepStatus
 from app.execution_event_service import ExecutionEventService
 from app.execution_service import ExecutionService
 from app.models import (
+    ActivePipeline,
     Artifact,
     ArtifactProvenance,
     ConfigScanFinding,
@@ -21,6 +24,10 @@ from app.models import (
     Execution,
     ExecutionEvent,
     ExecutionStep,
+    JobReport,
+    JobReportDetail,
+    JobStatus,
+    PipelineStatus,
     Product,
     Repository,
     RepositoryControlBinding,
@@ -36,6 +43,9 @@ def _session():
     for model in (
         Product,
         Repository,
+        ActivePipeline,
+        JobReport,
+        JobReportDetail,
         SecurityControl,
         RepositoryControlBinding,
         ConfigScanRun,
@@ -160,6 +170,71 @@ def test_target_360_combines_controls_runs_events_artifacts_and_delivery():
     assert next(item for item in snapshot["controls"] if item["key"] == "iac")["reason"] == "No include found"
 
 
+def test_target_360_separates_pipeline_outcome_from_unresolved_job_failure_and_links_gitlab():
+    db = _session()
+    product, repository = _target(db)
+    old_pipeline = ActivePipeline(
+        project_id=501,
+        pipeline_id=9000,
+        repository_id=repository.id,
+        product_id=product.id,
+        status=PipelineStatus.FAILED,
+        web_url="https://gitlab.example/platform/example_app/api/-/pipelines/9000",
+    )
+    latest_pipeline = ActivePipeline(
+        project_id=501,
+        pipeline_id=9001,
+        repository_id=repository.id,
+        product_id=product.id,
+        status=PipelineStatus.COMPLETED,
+        web_url="https://gitlab.example/platform/example_app/api/-/pipelines/9001",
+    )
+    db.add_all([old_pipeline, latest_pipeline])
+    db.flush()
+    observed_at = datetime(2026, 9, 24, 18, 50, tzinfo=timezone.utc)
+    ExecutionService(db).observe_execution(
+        source="gitlab_pipeline",
+        correlation_key="gitlab_pipeline:501:9001",
+        repository_id=repository.id,
+        product_id=product.id,
+        status=ExecutionStatus.SUCCEEDED,
+        observed_at=observed_at,
+    )
+    failed_job = JobReport(
+        repository_id=repository.id,
+        job_name="semgrep_scan",
+        job_status=JobStatus.FAILED,
+        pipeline_url=old_pipeline.web_url,
+        ref="feature/old-scan",
+        finished_at=observed_at - timedelta(days=7),
+    )
+    db.add(failed_job)
+    db.flush()
+    db.add(
+        JobReportDetail(
+            job_report_id=failed_job.id,
+            raw_payload={"job_url": "https://gitlab.example/platform/example_app/api/-/jobs/88"},
+        )
+    )
+    db.commit()
+
+    snapshot = Target360Service(db).snapshot(repository.id, now=observed_at)
+
+    assert snapshot["gitlab_repository_url"] == "https://gitlab.example/platform/example_app/api"
+    assert snapshot["executions"][0]["status"] == "succeeded"
+    assert snapshot["executions"][0]["gitlab_url"] == latest_pipeline.web_url
+    assert snapshot["job_health"]["broken_keys"] == 1
+    failure = snapshot["job_health"]["failures"][0]
+    assert failure["name"] == "semgrep_scan"
+    assert failure["ref"] == "feature/old-scan"
+    assert failure["finished_at"].startswith("2026-09-17T18:50:00")
+    assert failure["job_url"] == "https://gitlab.example/platform/example_app/api/-/jobs/88"
+    assert failure["pipeline_url"] == old_pipeline.web_url
+    assert snapshot["job_health"]["failures_href"] == (
+        f"/repos/{repository.id}/jobs?only_failed=true&status=failed&timeframe=all"
+    )
+
+
 def test_config_scan_projects_repository_observation_into_shared_execution():
     db = _session()
     product, repository = _target(db)
@@ -222,6 +297,14 @@ def test_target_360_template_exposes_end_to_end_operator_context():
         ui_auth_enabled=True,
         repository=SimpleNamespace(id=7, path="platform/example_app/api"),
         product=SimpleNamespace(name="ExampleApp", id=3),
+        gitlab_repository_url="https://gitlab.example/platform/example_app/api",
+        job_health={
+            "healthy_keys": 1,
+            "broken_keys": 1,
+            "total_keys": 2,
+            "failures": [{"name": "semgrep_scan", "ref": "feature/old-scan", "finished_at": "2026-07-20T01:57:00+00:00", "job_url": "https://gitlab.example/platform/example_app/api/-/jobs/88", "pipeline_url": "https://gitlab.example/platform/example_app/api/-/pipelines/9000"}],
+            "failures_href": "/repos/7/jobs?only_failed=true&status=failed&timeframe=all",
+        },
         coverage={"expected": 2, "configured": 1, "missing": 1, "excluded": 0},
         freshness={"state": "fresh", "label": "8 min ago", "observed_at": "2026-07-21T01:52:00+00:00"},
         summary={"executions": 1, "artifacts": 1, "confirmed_deliveries": 1, "failed_executions": 0},
@@ -237,6 +320,7 @@ def test_target_360_template_exposes_end_to_end_operator_context():
                 "source": "iac_repository",
                 "source_label": "IaC",
                 "correlation_key": "iac:42:100",
+                "gitlab_url": "https://gitlab.example/platform/example_app/api/-/pipelines/9001",
                 "status": "succeeded",
                 "failure_category": None,
                 "failure_reason": None,
@@ -253,5 +337,121 @@ def test_target_360_template_exposes_end_to_end_operator_context():
     for label in ("Target 360", "Control coverage", "Freshness", "Observed versions", "Execution timeline", "Artifacts & delivery", "Event evidence", "ASOC"):
         assert label in html
     assert 'href="/repos/7/jobs"' in html
+    assert 'href="/repos/7/jobs?only_failed=true&status=failed&timeframe=all"' in html
     assert 'href="/targets/products/3"' in html
     assert 'href="/targets/repositories/7?source=all"' in html
+    assert 'href="https://gitlab.example/platform/example_app/api"' in html
+    assert 'href="https://gitlab.example/platform/example_app/api/-/pipelines/9001"' in html
+    assert 'href="https://gitlab.example/platform/example_app/api/-/jobs/88"' in html
+    assert "unresolved failed job key" in html
+
+
+@pytest.mark.parametrize('origin', ['report', 'detail', 'pipeline'])
+@pytest.mark.parametrize('suffix', ['?private_token=' + 'x' * 32 + '#access_token=hidden',
+                                     ';private_token=' + 'glpat-' + 'a' * 20,
+                                     '%3Fprivate_token%3D' + 'glpat-' + 'a' * 20,
+                                     '/prefix-glpat-' + 'a' * 20,
+                                     '/glpat-' + 'a' * 20 + '.json',
+                                     ';download=prefix-glpat-' + 'a' * 20])
+def test_persisted_job_evidence_never_projects_credentials(origin, suffix):
+    import json
+    db = _session(); product, repository = _target(db)
+    clean = 'https://gitlab.example/platform/example_app/api/-/pipelines/15'
+    unsafe = clean + suffix
+    payload = {'job_url': 'https://gitlab.example/platform/example_app/api/-/jobs/8#token=hidden'}
+    if origin == 'detail':
+        payload['pipeline_url'] = unsafe
+    elif origin == 'pipeline':
+        db.add(ActivePipeline(project_id=501, pipeline_id=15, repository_id=repository.id,
+                              product_id=product.id, status=PipelineStatus.FAILED, web_url=unsafe))
+        payload.update(project_id=501, pipeline_id=15)
+    report = JobReport(repository_id=repository.id, job_name='scanner', job_status=JobStatus.FAILED,
+                       ref='main', finished_at=datetime.now(timezone.utc),
+                       pipeline_url=unsafe if origin == 'report' else None)
+    db.add(report); db.flush()
+    db.add(JobReportDetail(job_report_id=report.id, raw_payload=payload)); db.commit()
+    snapshot = Target360Service(db).snapshot(repository.id)
+    failure = snapshot['job_health']['failures'][0]
+    assert failure['pipeline_url'] == (clean if suffix.startswith('?') else None)
+    assert failure['job_url'] == 'https://gitlab.example/platform/example_app/api/-/jobs/8'
+    serialized = json.dumps(snapshot['job_health'])
+    assert 'private_token' not in serialized and 'access_token' not in serialized
+    assert 'x' * 32 not in serialized and 'glpat-' not in serialized
+    env = Environment(loader=FileSystemLoader('app/templates'))
+    env.filters['localtime'] = lambda value, _fmt=None: str(value or '')
+    env.globals.update(product_target_url=product_target_url, repository_target_url=repository_target_url)
+    html = env.get_template('repository_360.html').render(
+        **snapshot, request=SimpleNamespace(url=SimpleNamespace(path='/targets/repositories/1')),
+        ui_auth_enabled=True)
+    assert 'private_token' not in html and 'glpat-' not in html and 'x' * 32 not in html
+
+
+def test_repeated_failures_load_only_latest_detail_per_job_ref_key():
+    from sqlalchemy import event
+    db = _session(); product, repository = _target(db)
+    repository_id, path = repository.id, repository.path
+    now = datetime.now(timezone.utc)
+    for index in range(250):
+        report = JobReport(repository_id=repository_id, job_name='repeated', job_status=JobStatus.FAILED,
+                           ref=None, finished_at=now + timedelta(seconds=index))
+        db.add(report); db.flush()
+        db.add(JobReportDetail(job_report_id=report.id, raw_payload={'job_url': f'https://gitlab.example/jobs/{index}'}))
+    db.commit(); db.expunge_all()
+    loaded = []
+    def observed(report, context):
+        loaded.append(report.id)
+    event.listen(JobReport, 'load', observed)
+    try:
+        health = Target360Service(db)._job_health(repository_id, path, {}, {'job_health_broken': 1})
+    finally:
+        event.remove(JobReport, 'load', observed)
+    assert len(loaded) == 1
+    assert len(health['failures']) == 1
+    assert health['failures'][0]['job_url'] == 'https://gitlab.example/jobs/249'
+    assert not health['failures_truncated']
+
+
+def test_failure_detail_limit_preserves_total_and_marks_truncation():
+    db = _session(); product, repository = _target(db)
+    now = datetime.now(timezone.utc)
+    for index in range(105):
+        db.add(JobReport(repository_id=repository.id, job_name='scanner', ref=f'branch-{index}',
+                         job_status=JobStatus.FAILED, finished_at=now + timedelta(seconds=index)))
+    db.commit()
+    health = Target360Service(db)._job_health(repository.id, repository.path, {}, {'job_health_broken': 105})
+    assert health['broken_keys'] == 105
+    assert len(health['failures']) == health['failures_limit'] == 100
+    assert health['failures_truncated'] is True
+    assert health['failures'][0]['ref'] == 'branch-104'
+    assert 'timeframe=all' in health['failures_href']
+
+
+def test_target_360_projects_only_needed_pipeline_links_without_loading_history():
+    from sqlalchemy import event
+    db = _session(); product, repository = _target(db)
+    repository_id = repository.id
+    now = datetime.now(timezone.utc)
+    for index in range(1, 501):
+        db.add(ActivePipeline(project_id=501, pipeline_id=index, repository_id=repository_id,
+                              product_id=product.id, status=PipelineStatus.FAILED,
+                              web_url=f'https://gitlab.example/platform/example_app/api/-/pipelines/{index}'))
+    execution = ExecutionService(db).observe_execution(
+        source='gitlab_pipeline', correlation_key='gitlab_pipeline:501:500',
+        repository_id=repository_id, product_id=product.id,
+        status=ExecutionStatus.FAILED, observed_at=now)
+    report = JobReport(repository_id=repository_id, job_name='scanner', ref='main',
+                       job_status=JobStatus.FAILED, finished_at=now)
+    db.add(report); db.flush()
+    db.add(JobReportDetail(job_report_id=report.id, raw_payload={'project_id': 501, 'pipeline_id': 1}))
+    db.commit(); db.expunge_all()
+    loaded = []
+    def observed(row, context):
+        loaded.append(row.id)
+    event.listen(ActivePipeline, 'load', observed)
+    try:
+        snapshot = Target360Service(db).snapshot(repository_id, limit=1)
+    finally:
+        event.remove(ActivePipeline, 'load', observed)
+    assert loaded == []
+    assert snapshot['executions'][0]['gitlab_url'].endswith('/pipelines/500')
+    assert snapshot['job_health']['failures'][0]['pipeline_url'].endswith('/pipelines/1')

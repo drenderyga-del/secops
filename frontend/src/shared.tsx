@@ -161,6 +161,6 @@ export function Aperture({ small = false }: { small?: boolean }) {
   );
 }
 
-export function Status({ value }: { value: string }) {
-  return <span className={`status status-${statusTone(value)}`}><i />{value.replaceAll("_", " ").toLowerCase()}</span>;
+export function Status({ value, label, title }: { value: string; label?: string; title?: string }) {
+  return <span className={`status status-${statusTone(value)}`} title={title}><i />{label ?? value.replaceAll("_", " ").toLowerCase()}</span>;
 }

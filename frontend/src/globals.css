@@ -1576,7 +1576,7 @@ kbd { font-family: var(--font-mono); font-size: 12px; color: var(--quiet); borde
 .repository-row {
   min-width: 1098px;
   display: grid;
-  grid-template-columns: minmax(250px, 1.35fr) minmax(145px, .75fr) 110px 125px 85px 90px 220px;
+  grid-template-columns: minmax(220px, 1.35fr) minmax(135px, .75fr) 110px 125px 85px 130px 220px;
   gap: var(--space-3);
   align-items: center;
 }
@@ -1631,6 +1631,8 @@ kbd { font-family: var(--font-mono); font-size: 12px; color: var(--quiet); borde
 .repository-identity small,
 .repository-stat small,
 .repository-row time { color: var(--quiet); font-size: var(--type-label); }
+.repository-stat a { color: var(--acid); font-size: var(--type-label); font-weight: 600; text-decoration: none; }
+.repository-stat a:hover { text-decoration: underline; }
 .repository-product { color: var(--muted); font-size: var(--type-body); }
 .repository-product:hover,
 .repository-identity:hover strong { color: var(--acid); }

@@ -5,6 +5,7 @@ from urllib.parse import parse_qsl, urlsplit
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from fastapi.responses import HTMLResponse
 
 from app.main import app
 from app.routers.web import audit, logs, products
@@ -113,6 +114,95 @@ def test_legacy_detail_routes_redirect_without_losing_query_state():
         location = urlsplit(response.headers["location"])
         assert location.path == expected_path
         assert parse_qsl(location.query) == expected_query
+
+
+def test_repository_job_history_defaults_to_all_retained_results(monkeypatch):
+    captured = {}
+
+    class RepositoryQuery:
+        def filter(self, *_args):
+            return self
+
+        def first(self):
+            return SimpleNamespace(path="fintech/cbdc/cbdc-cc", product=None)
+
+    fake_db = SimpleNamespace(query=lambda *_args: RepositoryQuery())
+    empty_duration_summary = {
+        "avg": None,
+        "median": None,
+        "p95": None,
+        "latest": None,
+    }
+
+    class StubDatabaseService:
+        def __init__(self, _db):
+            pass
+
+        def get_pipeline_duration_summary(self, **_kwargs):
+            return empty_duration_summary
+
+        def get_job_duration_summary(self, **_kwargs):
+            return empty_duration_summary
+
+    monkeypatch.setattr(logs, "DatabaseService", StubDatabaseService)
+    monkeypatch.setattr(
+        logs,
+        "_render_jobs_page",
+        lambda *_args, **kwargs: (captured.update(kwargs) or HTMLResponse("ok")),
+    )
+    test_app = FastAPI()
+    test_app.include_router(logs.router)
+    test_app.dependency_overrides[logs.get_db] = lambda: fake_db
+
+    with TestClient(test_app) as client:
+        response = client.get("/repos/7/jobs")
+
+    assert response.status_code == 200
+    assert captured["timeframe"] == "all"
+
+
+def test_repository_unresolved_job_link_uses_unresolved_exact_id_filter(monkeypatch):
+    captured = {}
+
+    class RepositoryQuery:
+        def filter(self, *_args):
+            return self
+
+        def first(self):
+            return SimpleNamespace(path="fintech/cbdc/cbdc-cc", product=None)
+
+    fake_db = SimpleNamespace(query=lambda *_args: RepositoryQuery())
+    empty_duration_summary = {"avg": None, "median": None, "p95": None, "latest": None}
+
+    class StubDatabaseService:
+        def __init__(self, _db):
+            pass
+
+        def get_pipeline_duration_summary(self, **_kwargs):
+            return empty_duration_summary
+
+        def get_job_duration_summary(self, **_kwargs):
+            return empty_duration_summary
+
+    monkeypatch.setattr(logs, "DatabaseService", StubDatabaseService)
+    monkeypatch.setattr(
+        logs,
+        "_render_jobs_page",
+        lambda *_args, **kwargs: (captured.update(kwargs) or HTMLResponse("ok")),
+    )
+    test_app = FastAPI()
+    test_app.include_router(logs.router)
+    test_app.dependency_overrides[logs.get_db] = lambda: fake_db
+
+    with TestClient(test_app) as client:
+        response = client.get(
+            "/repos/7/jobs?only_failed=true&status=failed&timeframe=all"
+        )
+
+    assert response.status_code == 200
+    assert captured["repository_id"] == 7
+    assert captured["only_failed"] is True
+    assert captured["status"] == "failed"
 
 
 def test_unfiltered_audit_alias_uses_canonical_coverage_workspace():

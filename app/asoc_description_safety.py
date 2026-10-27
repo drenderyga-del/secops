@@ -75,13 +75,13 @@ _CREDENTIAL_PATH_KEYS = {
     "xsrftoken",
 }
 _KNOWN_TOKEN_SEGMENT_RE = re.compile(
-    r"^(?:glpat|glrt|glcbt|gldt|glsoat|gloas|glagent|glft|glptt)[-_][a-z0-9_-]{12,}$"
-    r"|^github_pat_[a-z0-9_]{20,}$"
-    r"|^gh[pousr]_[a-z0-9]{20,}$"
-    r"|^xox[baprs]-[a-z0-9-]{12,}$",
+    r"(?:glpat|glrt|glcbt|gldt|glsoat|gloas|glagent|glft|glptt)[-_][a-z0-9_-]{12,}"
+    r"|github_pat_[a-z0-9_]{20,}"
+    r"|gh[pousr]_[a-z0-9]{20,}"
+    r"|xox[baprs]-[a-z0-9-]{12,}",
     re.IGNORECASE,
 )
-_JWT_SEGMENT_RE = re.compile(r"^eyj[a-z0-9_-]{8,}\.eyj[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}$", re.IGNORECASE)
+_JWT_SEGMENT_RE = re.compile(r"eyj[a-z0-9_-]{8,}\.eyj[a-z0-9_-]{8,}\.[a-z0-9_-]{8,}", re.IGNORECASE)
 _HEX_SECRET_SEGMENT_RE = re.compile(r"^[a-f0-9]{32,}$", re.IGNORECASE)
 _UUID_SEGMENT_RE = re.compile(
     r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
@@ -100,8 +100,8 @@ def _looks_like_token_segment(segment: str) -> bool:
     if not candidate or _UUID_SEGMENT_RE.fullmatch(candidate):
         return False
     if (
-        _KNOWN_TOKEN_SEGMENT_RE.fullmatch(candidate)
-        or _JWT_SEGMENT_RE.fullmatch(candidate)
+        _KNOWN_TOKEN_SEGMENT_RE.search(candidate)
+        or _JWT_SEGMENT_RE.search(candidate)
         or _HEX_SECRET_SEGMENT_RE.fullmatch(candidate)
     ):
         return True
@@ -129,15 +129,16 @@ def _contains_credential_path(path: str, *, allow_name_segments: bool = False) -
         # after a later decoding pass.
         if unquote(decoded) != decoded:
             return True
-    for segment in decoded.split("/"):
-        key = re.split(r"[=:]", segment, maxsplit=1)[0]
+    # Matrix parameters and encoded query-like delimiters can carry secrets
+    # inside a path segment. Inspect every component after bounded decoding.
+    for component in re.split(r"[/;?&#]", decoded):
+        pieces = re.split(r"[=:]", component)
+        key = pieces[0]
         named_key = re.sub(r"[^a-z0-9]+", "", key.casefold()) in _CREDENTIAL_PATH_KEYS
-        # In GitLab identities plain words are legitimate group/project names
-        # ("platform/secrets", "auth/oauth2"); there only key=value pairs name
-        # a credential. Other external URLs keep the stricter word check.
-        if named_key and (not allow_name_segments or re.search(r"[=:]", segment)):
+        # Plain credential words remain valid GitLab group/project names.
+        if named_key and (not allow_name_segments or len(pieces) > 1):
             return True
-        if _looks_like_token_segment(segment):
+        if any(_looks_like_token_segment(piece) for piece in pieces):
             return True
     return False
 

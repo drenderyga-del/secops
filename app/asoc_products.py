@@ -662,22 +662,26 @@ def record_sync_outcome(
         "result": {key: int(value) for key, value in (result or {}).items() if isinstance(value, int)},
     }
     value = json.dumps(outcome)
-    row = db.query(AppState).filter(AppState.key == ASOC_SYNC_STATE_KEY).first()
-    if row is not None and _stored_attempt_is_newer(row.value, outcome["at"]):
-        # A slower attempt that started earlier must not hide a newer result.
-        return outcome
+    def locked_row():
+        # Refresh any identity-map entry after obtaining the database row lock.
+        return (db.query(AppState).filter(AppState.key == ASOC_SYNC_STATE_KEY)
+                .populate_existing().with_for_update().first())
+
+    row = locked_row()
     if row is None:
         db.add(AppState(key=ASOC_SYNC_STATE_KEY, value=value))
         try:
             db.commit()
             return outcome
         except IntegrityError:
-            # The web app and the worker can record their first outcome at the
-            # same time; the sync itself is already committed, so just update.
             db.rollback()
-            row = db.query(AppState).filter(AppState.key == ASOC_SYNC_STATE_KEY).one()
-            if _stored_attempt_is_newer(row.value, outcome["at"]):
-                return outcome
+            row = locked_row()
+            if row is None:
+                raise RuntimeError('ASOC outcome row disappeared after concurrent insertion') from None
+    if _stored_attempt_is_newer(row.value, outcome["at"]):
+        # Recheck only while holding the lock; a slower old attempt cannot win.
+        db.commit()
+        return outcome
     row.value = value
     db.commit()
     return outcome

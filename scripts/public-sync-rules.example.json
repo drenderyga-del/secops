@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "exclude": [],
+  "keep_public": [],
+  "replacements": [
+    {
+      "id": "example-private-registry",
+      "paths": ["*"],
+      "find": "registry.corp.example/scanops",
+      "replace": "registry.example.com/scanops/scanops",
+      "ignore_case": true
+    }
+  ],
+  "forbidden_literals": ["corp.example"],
+  "approved_binary_sha256": []
+}

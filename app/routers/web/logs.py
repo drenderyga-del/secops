@@ -27,7 +27,7 @@ from ...config_scan_service import ConfigScanService, project_counts_for_run
 from ...config_scan_reporting import findings_severity_counts, format_scan_duration, gitlab_path_from_product_field
 from ...iac_service import IacService
 from ...target_360_service import Target360Service
-from ...url_safety import safe_external_http_url
+from ...url_safety import safe_evidence_http_url
 from ...models.iac import IacScanRun
 from ...models.job_report import JobStatus
 from ...target_navigation import (
@@ -109,12 +109,13 @@ async def repository_logs(
     job: str = "",
     category: str = "all",
     status: str = "all",
+    only_failed: bool = False,
     page: int = 1,
-    timeframe: str = "7d",
+    timeframe: str = "all",
     db: Session = Depends(get_db)
 ):
     db_service = DatabaseService(db)
-    timeframe_value = _normalize_timeframe(timeframe, LOG_TIMEFRAME_VALUES, "7d")
+    timeframe_value = _normalize_timeframe(timeframe, LOG_TIMEFRAME_VALUES, "all")
 
     repository = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repository:
@@ -132,14 +133,23 @@ async def repository_logs(
         category=category,
         status=status,
         page=page,
-        only_failed=False,
+        only_failed=only_failed,
         base_path_override=f"/repos/{repository_id}/jobs",
         repo_locked=True,
         repo_display_name=repo_name,
-        view_title_override=f"{repository.path} Logs",
-        view_description_override="Full job history for this repository",
-        empty_title_override="No Jobs Found",
-        empty_text_override="No jobs match the current filters for this repository.",
+        view_title_override=(
+            f"{repository.path} Unresolved Job Failures"
+            if only_failed else f"{repository.path} Logs"
+        ),
+        view_description_override=(
+            "Unresolved failed job/ref keys for this repository"
+            if only_failed else "Full job history for this repository"
+        ),
+        empty_title_override="No Unresolved Job Failures" if only_failed else "No Jobs Found",
+        empty_text_override=(
+            "No unresolved failed jobs match the current filters for this repository."
+            if only_failed else "No jobs match the current filters for this repository."
+        ),
         duration_summary_override=_format_duration_summary(
             db_service.get_pipeline_duration_summary(repository_id=repository_id, timeframe=timeframe_value)
         ),
@@ -232,7 +242,7 @@ def _render_jobs_page(
     page_start = (page - 1) * page_size + 1 if total_count else 0
     page_end = min(page * page_size, total_count)
     pipeline_urls_by_job_id = {
-        job.id: safe_external_http_url(job.pipeline_url)
+        job.id: safe_evidence_http_url(job.pipeline_url)
         for job in jobs
     }
 
@@ -265,6 +275,7 @@ def _render_jobs_page(
         "job_options": job_options,
         "page_size": page_size,
         "view_mode": view_mode,
+        "only_failed": only_failed,
         "view_title": view_title_override or default_view_title,
         "view_description": view_description_override or default_view_description,
         "empty_title": empty_title_override or default_empty_title,
