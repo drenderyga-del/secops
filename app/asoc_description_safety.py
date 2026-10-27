@@ -129,15 +129,16 @@ def _contains_credential_path(path: str, *, allow_name_segments: bool = False) -
         # after a later decoding pass.
         if unquote(decoded) != decoded:
             return True
-    for segment in decoded.split("/"):
-        key = re.split(r"[=:]", segment, maxsplit=1)[0]
+    # Matrix parameters and encoded query-like delimiters can carry secrets
+    # inside a path segment. Inspect every component after bounded decoding.
+    for component in re.split(r"[/;?&#]", decoded):
+        pieces = re.split(r"[=:]", component)
+        key = pieces[0]
         named_key = re.sub(r"[^a-z0-9]+", "", key.casefold()) in _CREDENTIAL_PATH_KEYS
-        # In GitLab identities plain words are legitimate group/project names
-        # ("platform/secrets", "auth/oauth2"); there only key=value pairs name
-        # a credential. Other external URLs keep the stricter word check.
-        if named_key and (not allow_name_segments or re.search(r"[=:]", segment)):
+        # Plain credential words remain valid GitLab group/project names.
+        if named_key and (not allow_name_segments or len(pieces) > 1):
             return True
-        if _looks_like_token_segment(segment):
+        if any(_looks_like_token_segment(piece) for piece in pieces):
             return True
     return False
 

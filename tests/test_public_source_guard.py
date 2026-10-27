@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.parametrize('path', [
     '.impeccable/critique/private.md', '.codex/private.md',
+    '.ENV', '.Env.production', 'CERT/private.txt', 'QA/ARTIFACTS/report.txt',
+    '.Codex/private.md', '.AGENTS/state.txt', '.GITLAB-CI.yml',
     'docs/superpowers/plans/private.md', '.env.private', 'CODEX_CONTEXT.md',
     'codex-session/notes.md', '.codex-backup/state.json',
     'playwright-report/index.html', 'test-results/screen.png',

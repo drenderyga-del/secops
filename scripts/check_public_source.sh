@@ -14,20 +14,20 @@ for raw in subprocess.check_output(['git', 'ls-files', '-z', '--cached', '--othe
         continue
     source = Path(raw.decode())
     local_dirs = {
-        '.codex', '.agents', '.claude', '.impeccable', '.repowise',
+        '.git', '.gitlab', '.codex', '.agents', '.claude', '.impeccable', '.repowise',
         '.playwright-cli', 'playwright-report', 'test-results', 'cert', 'certs',
     }
-    local_names = ('CODEX_CONTEXT.md', '.codex*', 'codex-*', '*.local.*')
+    local_names = ('.gitlab*', 'CODEX_CONTEXT.md', '.codex*', 'codex-*', '*.local.*')
     sensitive_extensions = ('*.pem', '*.key', '*.p12', '*.pfx', '*.crt', '*.cer',
                             '*.dump', '*.sql.gz', '*.db', '*.sqlite', '*.sqlite3')
-    path = source.as_posix()
-    if (any(part in local_dirs for part in source.parts)
-        or any(fnmatch.fnmatchcase(part, pattern)
+    path = source.as_posix().casefold()
+    if (any(part.casefold() in local_dirs for part in source.parts)
+        or any(fnmatch.fnmatchcase(part.casefold(), pattern.casefold())
                for part in source.parts for pattern in local_names)
         or any(fnmatch.fnmatchcase(source.name.lower(), pattern)
                for pattern in sensitive_extensions)
         or path.startswith(('docs/superpowers/', 'qa/artifacts/', 'output/playwright/'))
-        or (source.name.startswith('.env') and source.name != '.env.example')):
+        or (source.name.casefold().startswith('.env') and source.name.casefold() != '.env.example')):
         raise SystemExit('Forbidden local metadata path: ' + path)
 
     if source.is_symlink():

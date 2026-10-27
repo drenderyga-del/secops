@@ -162,6 +162,12 @@ def test_logs_template_only_links_safe_persisted_pipeline_urls(job_db, monkeypat
     'https://gitlab.example/platform/private_token=not-public',
     'https://gitlab.example/platform/private_token%3Dnot-public',
     'https://glpat-' + 'a' * 20 + '.example/jobs/1',
+    *['https://gitlab.example/platform/example/-/jobs/1' + suffix for suffix in (
+        ';private_token=' + 'glpat-' + 'a' * 20,
+        '%3Fprivate_token%3D' + 'glpat-' + 'a' * 20,
+        ';download=' + 'glpat-' + 'a' * 20,
+        '%253Fprivate_token%253Dhidden',
+    )],
 ])
 def test_evidence_link_rejects_credential_shaped_path_and_host(value):
     from app.url_safety import safe_evidence_http_url

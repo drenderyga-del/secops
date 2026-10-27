@@ -347,11 +347,14 @@ def test_target_360_template_exposes_end_to_end_operator_context():
 
 
 @pytest.mark.parametrize('origin', ['report', 'detail', 'pipeline'])
-def test_persisted_job_evidence_never_projects_query_or_fragment_credentials(origin):
+@pytest.mark.parametrize('suffix', ['?private_token=' + 'x' * 32 + '#access_token=hidden',
+                                     ';private_token=' + 'glpat-' + 'a' * 20,
+                                     '%3Fprivate_token%3D' + 'glpat-' + 'a' * 20])
+def test_persisted_job_evidence_never_projects_credentials(origin, suffix):
     import json
     db = _session(); product, repository = _target(db)
     clean = 'https://gitlab.example/platform/example_app/api/-/pipelines/15'
-    unsafe = clean + '?private_token=' + 'x' * 32 + '#access_token=hidden'
+    unsafe = clean + suffix
     payload = {'job_url': 'https://gitlab.example/platform/example_app/api/-/jobs/8#token=hidden'}
     if origin == 'detail':
         payload['pipeline_url'] = unsafe
@@ -366,11 +369,18 @@ def test_persisted_job_evidence_never_projects_query_or_fragment_credentials(ori
     db.add(JobReportDetail(job_report_id=report.id, raw_payload=payload)); db.commit()
     snapshot = Target360Service(db).snapshot(repository.id)
     failure = snapshot['job_health']['failures'][0]
-    assert failure['pipeline_url'] == clean
+    assert failure['pipeline_url'] == (clean if suffix.startswith('?') else None)
     assert failure['job_url'] == 'https://gitlab.example/platform/example_app/api/-/jobs/8'
     serialized = json.dumps(snapshot['job_health'])
     assert 'private_token' not in serialized and 'access_token' not in serialized
-    assert 'x' * 32 not in serialized
+    assert 'x' * 32 not in serialized and 'glpat-' not in serialized
+    env = Environment(loader=FileSystemLoader('app/templates'))
+    env.filters['localtime'] = lambda value, _fmt=None: str(value or '')
+    env.globals.update(product_target_url=product_target_url, repository_target_url=repository_target_url)
+    html = env.get_template('repository_360.html').render(
+        **snapshot, request=SimpleNamespace(url=SimpleNamespace(path='/targets/repositories/1')),
+        ui_auth_enabled=True)
+    assert 'private_token' not in html and 'glpat-' not in html and 'x' * 32 not in html
 
 
 def test_repeated_failures_load_only_latest_detail_per_job_ref_key():

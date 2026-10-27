@@ -14,6 +14,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 
@@ -32,8 +33,17 @@ EXCLUDED_PATHS = (
     'docs/superpowers/*', 'qa/artifacts/*', 'output/*',
     'scripts/gitlab_mr_gate.py', 'tests/test_gitlab_mr_gate.py',
 )
-PUBLIC_OWNED = ('README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'LICENSE', '.github/*')
+PUBLIC_OWNED = ('README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'LICENSE', '.github/*',
+                '.gitleaks.toml', 'scripts/check_public_source.sh')
 
+
+# Low-entropy token filenames must also fail the path-manifest scan.
+PATH_SCANNER_RULE = br"""
+[[rules]]
+id = "public-filename-credential"
+description = "Credential-shaped filename"
+regex = '''(?i)(?:glpat|glrt|glcbt|gldt|glsoat|gloas|glagent|glft|glptt)[-_][a-z0-9_-]{12,}|github_pat_[a-z0-9_]{20,}|gh[pousr]_[a-z0-9]{20,}|xox[baprs]-[a-z0-9-]{12,}|(?:private[_-]?token|access[_-]?token|api[_-]?key|password|secret)[=:][^/\s]{4,}'''
+"""
 
 class ExportBlocked(Exception):
     pass
@@ -59,12 +69,12 @@ def safe_path(value: str) -> str:
 
 def excluded(path: str, patterns=()) -> bool:
     parts = PurePosixPath(path).parts
-    name = parts[-1]
-    return (any(part in EXCLUDED_DIRS for part in parts)
+    name = parts[-1].casefold()
+    return (any(part.casefold() in EXCLUDED_DIRS for part in parts)
             or any(fnmatch.fnmatchcase(part.lower(), pattern.lower())
                    for part in parts for pattern in EXCLUDED_NAMES)
             or (name.startswith('.env') and name != '.env.example')
-            or any(fnmatch.fnmatchcase(path, pattern)
+            or any(fnmatch.fnmatchcase(path.casefold(), pattern.casefold())
                    for pattern in (*EXCLUDED_PATHS, *patterns)))
 
 
@@ -189,12 +199,18 @@ def prepare(source: Path, base_ref: str, source_ref: str, public: Path,
     current, public_omissions = tree(public, public_sha)
     if public_omissions:
         raise ExportBlocked('public_tree_contains_local_artifacts')
-    report['excluded_paths'] = omissions
     scanner_config = current.get('.gitleaks.toml')
     if scanner_config is None:
         raise ExportBlocked('public_scanner_config_missing')
     with tempfile.TemporaryDirectory(prefix='.public-export-', dir=output.parent) as tmp:
         temporary = Path(tmp); temporary.chmod(0o700)
+        # Directory scanners inspect contents, not filenames. Scan every path
+        # before putting even excluded paths into the private report.
+        paths_dir = temporary / 'paths'; paths_dir.mkdir()
+        paths = sorted(set(base_raw) | set(incoming_raw) | set(current) | set(omissions))
+        (paths_dir / 'manifest.txt').write_text('\n'.join(paths), encoding='utf-8')
+        scan(paths_dir, scanner_config[0] + PATH_SCANNER_RULE, temporary)
+        report['excluded_paths'] = omissions
         raw_dir = temporary / 'raw'; raw_dir.mkdir()
         write_tree(raw_dir, incoming_raw)
         scan(raw_dir, scanner_config[0], temporary)
@@ -206,7 +222,8 @@ def prepare(source: Path, base_ref: str, source_ref: str, public: Path,
             old = base.get(path); new = incoming.get(path); present = current.get(path)
             if old == new:
                 continue
-            if any(fnmatch.fnmatchcase(path, p) for p in (*PUBLIC_OWNED, *config.get('keep_public', []))):
+            if any(fnmatch.fnmatchcase(path.casefold(), p.casefold())
+                   for p in (*PUBLIC_OWNED, *config.get('keep_public', []))):
                 kept.append(path)
                 continue
             if present == new:
@@ -276,6 +293,15 @@ def main() -> int:
         if not args.output.parent.is_dir() or not args.report.parent.is_dir():
             raise ExportBlocked('external_parent_missing')
         external_paths_valid = True
+        if args.rules.is_symlink():
+            raise ExportBlocked('use_private_external_rules')
+        args.rules = args.rules.resolve()
+        if any(args.rules.is_relative_to(repo) for repo in (args.source, args.public)):
+            raise ExportBlocked('use_private_external_rules')
+        metadata = args.rules.stat()
+        if (not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) != 0o600
+                or metadata.st_uid != os.getuid()):
+            raise ExportBlocked('use_private_external_rules')
         prepare(args.source, args.base_ref, args.ref, args.public, args.output, args.rules, report)
         report['status'] = 'prepared_for_review'
     except ExportBlocked as error:

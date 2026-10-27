@@ -16,7 +16,9 @@ You need Python 3.12, Git and Gitleaks on PATH, plus:
   public-only changes first; untracked and uncommitted files are not exported.
 - Private replacement rules, stored outside both repositories. Start from
   [the generic example](../scripts/public-sync-rules.example.json), replace its
-  example values locally, and keep the real policy out of Git.
+  example values locally, set mode 600, and keep the real policy out of Git.
+  Rules must be an owner-private regular file outside both repositories;
+  symlinks are refused.
 - New output/report paths outside both repositories, under a private directory.
 
 Example after setting `LAST_SOURCE_SHA` and `NEW_SOURCE_SHA` to reviewed commits:
@@ -44,13 +46,15 @@ are never replaced. A nonzero exit means the candidate is blocked.
    SQLite data, local agent state, build caches, browser artifacts and private
    GitLab CI/merge-gate files. Symlinks/submodules outside excluded paths block
    the export rather than being followed.
-3. Runs Gitleaks on retained source files before replacements. A credential
+3. Runs Gitleaks on a filename manifest (including excluded paths), then on
+   retained source files before replacements. A credential
    finding blocks preparation; replacing a credential does not revoke it.
 4. Applies configured literal replacements to text. It then applies the source
    delta with three-way comparison, retaining independent public changes.
    Conflicts, including deletion of a publicly modified file, block the export.
 5. Preserves the public README, contributor/agent instructions, license and
-   GitHub workflows. Source changes to these are recorded for manual review.
+   GitHub workflows, and public secret-scanning policy/scripts. Source changes
+   to these are recorded for manual review.
 6. Blocks remaining configured internal markers, Cyrillic Markdown, and new
    binary content without an approved SHA-256. Unchanged public binaries are
    already approved by their current hashes.

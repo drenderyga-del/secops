@@ -171,3 +171,80 @@ def test_unrecognized_rule_keys_fail_closed(tmp_path, repos):
     result, output, report = run_export(tmp_path, repos, {'schema_version': 1, 'forbiden_literals': ['typo']})
     assert result.returncode == 1 and report['error'] == 'invalid_rules'
     assert not output.exists()
+
+
+def test_incoming_source_cannot_replace_public_secret_scanning_policy(tmp_path, repos):
+    source, public, _ = repos
+    (public / 'scripts').mkdir()
+    (public / 'scripts/check_public_source.sh').write_text('#!/bin/sh\nexit 1\n')
+    commit(public)
+    (source / '.gitleaks.toml').write_text('[allowlist]\nregexes = [".*"]\n')
+    (source / 'scripts').mkdir()
+    (source / 'scripts/check_public_source.sh').write_text('#!/bin/sh\nexit 0\n')
+    commit(source)
+    result, output, report = run_export(tmp_path, repos)
+    assert result.returncode == 0, result.stdout
+    for name in ('.gitleaks.toml', 'scripts/check_public_source.sh'):
+        assert (output / name).read_bytes() == (public / name).read_bytes()
+        assert name in report['preserved_public_paths']
+
+
+def test_private_artifact_exclusions_are_case_insensitive(tmp_path, repos):
+    source, public, _ = repos
+    private_paths = ('.ENV', '.Env.production', 'CERT/private.txt', 'QA/artifacts/report.txt',
+                     '.GITLAB/private.txt', '.GitLab-CI.yml', 'EXPORT.LOCAL.JSON')
+    for name in private_paths:
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('Private deployment metadata.\n')
+    commit(source)
+    result, output, report = run_export(tmp_path, repos)
+    assert result.returncode == 0, result.stdout
+    for name in private_paths:
+        assert not (output / name).exists()
+        assert name in report['excluded_paths']
+
+
+@pytest.mark.parametrize('excluded_path', [False, True])
+def test_token_in_filename_blocks_before_filename_is_written_to_report(tmp_path, repos, excluded_path):
+    source, public, _ = repos
+    secret = 'glpat-' + 'a' * 20
+    name = ('cert/' if excluded_path else '') + secret + '.md'
+    path = source / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('Ordinary text.\n')
+    commit(source)
+    # Model a content-only scanner: only the explicit manifest reveals the name.
+    scanner = tmp_path / 'bin/gitleaks'
+    scanner.write_text('#!' + sys.executable + '\nimport pathlib,sys\n'
+                       'root=pathlib.Path(sys.argv[-1])\n'
+                       'raise SystemExit(1 if any("glpat-" in p.read_text() '
+                       'for p in root.rglob("*") if p.is_file()) else 0)\n')
+    result, output, report = run_export(tmp_path, repos)
+    assert result.returncode == 1 and report['error'] == 'secret_scan_failed'
+    assert not output.exists()
+    assert secret not in json.dumps(report) + result.stdout + result.stderr
+
+
+@pytest.mark.parametrize('name', ['.GIT/config', '.Codex/settings.json', '.AGENTS/state.json',
+                                  '.GIT/objects/ab/data', '.Env', 'QA/ARTIFACTS/results.json'])
+def test_case_variant_metadata_paths_are_rejected_without_touching_filesystem(name):
+    import runpy
+    assert runpy.run_path(str(SCRIPT))['excluded'](name)
+
+
+@pytest.mark.parametrize('location', ['source', 'public', 'symlink', 'broad-permissions'])
+def test_replacement_rules_must_be_private_external_regular_file(tmp_path, repos, location):
+    source, public, _ = repos
+    path = ((source if location == 'source' else public) / 'private-rules.json'
+            if location in {'source', 'public'} else tmp_path / 'unsafe-rules.json')
+    if location == 'symlink':
+        real = tmp_path / 'real-rules.json'
+        real.write_text('{"schema_version": 1}'); real.chmod(0o600)
+        path.symlink_to(real)
+    else:
+        path.write_text('{"schema_version": 1}')
+        path.chmod(0o644 if location == 'broad-permissions' else 0o600)
+    result, output, report = run_export(tmp_path, repos, extra=('--rules', str(path)))
+    assert result.returncode == 1 and report['error'] == 'use_private_external_rules'
+    assert not output.exists()
