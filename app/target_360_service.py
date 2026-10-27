@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, tuple_
 from sqlalchemy.orm import Session, joinedload
 
 from .control_coverage import coverage_by_repository
@@ -58,13 +58,16 @@ class Target360Service:
 
         product = repository.product
         gitlab_repository_url = self._gitlab_repository_url(repository, product)
-        pipeline_urls = self._pipeline_urls(repository, gitlab_repository_url)
         lifecycle = ExecutionService(self.db)
         all_executions = lifecycle.repository_timeline(repository_id, limit=limit)
         executions = (
             all_executions
             if not source
             else lifecycle.repository_timeline(repository_id, limit=limit, source=source)
+        )
+        pipeline_urls = self._pipeline_urls(
+            repository, gitlab_repository_url,
+            {row['correlation_key'] for row in [*executions, *all_executions]},
         )
         for execution in executions:
             execution["source_label"] = self.source_label(execution["source"])
@@ -158,10 +161,27 @@ class Target360Service:
         self,
         repository: Repository,
         repository_url: str | None,
+        keys: set[str],
     ) -> dict[str, str]:
+        pairs = set()
+        for key in keys:
+            if not isinstance(key, str) or len(key) > 80:
+                continue
+            parts = key.split(':')
+            if len(parts) != 3 or parts[0] != 'gitlab_pipeline':
+                continue
+            try:
+                pair = (int(parts[1]), int(parts[2]))
+            except ValueError:
+                continue
+            if all(0 < value < 2**63 for value in pair):
+                pairs.add(pair)
+        if not pairs:
+            return {}
         rows = (
-            self.db.query(ActivePipeline)
-            .filter(ActivePipeline.repository_id == repository.id)
+            self.db.query(ActivePipeline.project_id, ActivePipeline.pipeline_id, ActivePipeline.web_url)
+            .filter(ActivePipeline.repository_id == repository.id,
+                    tuple_(ActivePipeline.project_id, ActivePipeline.pipeline_id).in_(pairs))
             .all()
         )
         urls: dict[str, str] = {}
@@ -207,6 +227,16 @@ class Target360Service:
             .all()
         )
         truncated = len(failures) > failure_limit
+        fallback_keys = set()
+        for report in failures[:failure_limit]:
+            detail = report.detail.raw_payload if report.detail else {}
+            if isinstance(detail, dict):
+                fallback_keys.add(f"gitlab_pipeline:{detail.get('project_id')}:{detail.get('pipeline_id')}")
+        missing = fallback_keys - pipeline_urls.keys()
+        if missing:
+            repository = self.db.get(Repository, repository_id)
+            pipeline_urls = {**pipeline_urls, **self._pipeline_urls(
+                repository, self._gitlab_repository_url(repository, repository.product), missing)}
         latest_by_key: dict[tuple[str, str | None], dict[str, Any]] = {}
         for report in failures[:failure_limit]:
             key = (report.job_name, report.ref)

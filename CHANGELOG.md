@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Load repository pipeline links only for visible evidence and compute exact
+  all-history duration summaries in SQL without loading historical payloads.
+
 - Import upstream fixes for stale long-running alerts, repository failure
   evidence, exact-instance search and retained-history drill-downs.
 - Strip credentials from persisted evidence links, bound repository failure

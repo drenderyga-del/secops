@@ -421,3 +421,34 @@ def test_failure_detail_limit_preserves_total_and_marks_truncation():
     assert health['failures_truncated'] is True
     assert health['failures'][0]['ref'] == 'branch-104'
     assert 'timeframe=all' in health['failures_href']
+
+
+def test_target_360_projects_only_needed_pipeline_links_without_loading_history():
+    from sqlalchemy import event
+    db = _session(); product, repository = _target(db)
+    repository_id = repository.id
+    now = datetime.now(timezone.utc)
+    for index in range(1, 501):
+        db.add(ActivePipeline(project_id=501, pipeline_id=index, repository_id=repository_id,
+                              product_id=product.id, status=PipelineStatus.FAILED,
+                              web_url=f'https://gitlab.example/platform/example_app/api/-/pipelines/{index}'))
+    execution = ExecutionService(db).observe_execution(
+        source='gitlab_pipeline', correlation_key='gitlab_pipeline:501:500',
+        repository_id=repository_id, product_id=product.id,
+        status=ExecutionStatus.FAILED, observed_at=now)
+    report = JobReport(repository_id=repository_id, job_name='scanner', ref='main',
+                       job_status=JobStatus.FAILED, finished_at=now)
+    db.add(report); db.flush()
+    db.add(JobReportDetail(job_report_id=report.id, raw_payload={'project_id': 501, 'pipeline_id': 1}))
+    db.commit(); db.expunge_all()
+    loaded = []
+    def observed(row, context):
+        loaded.append(row.id)
+    event.listen(ActivePipeline, 'load', observed)
+    try:
+        snapshot = Target360Service(db).snapshot(repository_id, limit=1)
+    finally:
+        event.remove(ActivePipeline, 'load', observed)
+    assert loaded == []
+    assert snapshot['executions'][0]['gitlab_url'].endswith('/pipelines/500')
+    assert snapshot['job_health']['failures'][0]['pipeline_url'].endswith('/pipelines/1')

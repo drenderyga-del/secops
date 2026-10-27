@@ -846,9 +846,7 @@ class DatabaseService:
         if repository_id is not None:
             query = query.filter(JobReport.repository_id == repository_id)
         query = self._apply_job_category_filter(query, category_filter)
-        jobs = query.order_by(JobReport.finished_at.desc()).all()
-        durations = [float(job.duration_seconds) for job in jobs if job.duration_seconds is not None and job.duration_seconds >= 0]
-        return self._summarize_durations(durations, latest=durations[0] if durations else None)
+        return self._sql_duration_summary(query, JobReport)
 
     def get_pipeline_duration_summary(
         self,
@@ -865,13 +863,28 @@ class DatabaseService:
             query = query.filter(ActivePipeline.product_id == product_id)
         if repository_id is not None:
             query = query.filter(ActivePipeline.repository_id == repository_id)
-        pipelines = query.order_by(ActivePipeline.finished_at.desc()).all()
-        durations = [
-            float(pipeline.duration_seconds)
-            for pipeline in pipelines
-            if pipeline.duration_seconds is not None and pipeline.duration_seconds >= 0
-        ]
-        return self._summarize_durations(durations, latest=durations[0] if durations else None)
+        return self._sql_duration_summary(query, ActivePipeline)
+
+    def _sql_duration_summary(self, query, model) -> dict:
+        """Compute exact percentiles in SQL without loading historical ORM rows."""
+        query = query.filter(model.duration_seconds >= 0)
+        ranked = query.with_entities(
+            model.duration_seconds.label('duration'),
+            func.row_number().over(order_by=model.duration_seconds).label('rank'),
+            func.count().over().label('total'),
+        ).subquery()
+        c = ranked.c
+        median_position = or_(c.rank == func.floor((c.total + 1) / 2),
+                              c.rank == func.floor((c.total + 2) / 2))
+        count, average, median, p95 = self.db.query(
+            func.max(c.total), func.avg(c.duration),
+            func.avg(case((median_position, c.duration), else_=None)),
+            func.max(case((c.rank == func.floor((c.total * 95 + 99) / 100), c.duration), else_=None)),
+        ).one()
+        latest = query.with_entities(model.duration_seconds).order_by(
+            model.finished_at.desc(), model.id.desc()).limit(1).scalar()
+        return {'count': int(count or 0), 'avg': average, 'median': median,
+                'p95': p95, 'latest': latest}
 
     def get_pipeline_duration_summaries_by_product(
         self, *, timeframe: Optional[str] = "30d"
